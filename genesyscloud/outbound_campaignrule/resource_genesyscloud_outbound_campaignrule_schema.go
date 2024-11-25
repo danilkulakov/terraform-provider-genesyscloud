@@ -19,6 +19,23 @@ resource_genesycloud_outbound_campaignrule_schema.go holds four functions within
 */
 const ResourceType = "genesyscloud_outbound_campaignrule"
 
+func getAllowedActions() []string {
+	return []string{
+		"turnOnCampaign",
+		"turnOffCampaign",
+		"turnOnSequence",
+		"turnOffSequence",
+		"setCampaignPriority",
+		"recycleCampaign",
+		"setCampaignDialingMode",
+		"setCampaignAbandonRate",
+		"setCampaignNumberOfLines",
+		"setCampaignWeight",
+		"setCampaignMaxCallsPerAgent",
+		"changeCampaignQueue",
+	}
+}
+
 var (
 	outboundCampaignRuleEntities = &schema.Resource{
 		Schema: map[string]*schema.Schema{
@@ -91,6 +108,35 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 				Type:         schema.TypeString,
 				ValidateFunc: validation.StringInSlice([]string{"agentless", "preview", "power", "predictive", "progressive", "external"}, true),
 			},
+			`abandon_rate`: {
+				Description:  `Compliance Abandon Rate. Required for 'setCampaignAbandonRate' action`,
+				Optional:     true,
+				Type:         schema.TypeFloat,
+				ValidateFunc: validation.FloatAtLeast(0.1),
+			},
+			`outbound_line_count`: {
+				Description:  `Number of Outbound lines. Required for 'setCampaignNumberOfLines' action`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntAtLeast(0),
+			},
+			`relative_weight`: {
+				Description:  `Relative weight. Required for 'setCampaignWeight' action`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntBetween(0, 100),
+			},
+			`max_calls_per_agent`: {
+				Description:  `Max calls per agent. Optional parameter for 'setCampaignMaxCallsPerAgent' action`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntAtLeast(0),
+			},
+			`queue_id`: {
+				Description: `The ID of the Queue. Required for 'changeCampaignQueue' action`,
+				Optional:    true,
+				Type:        schema.TypeString,
+			},
 		},
 	}
 
@@ -136,7 +182,7 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 (turnOnCampaign | turnOffCampaign | turnOnSequence | turnOffSequence | setCampaignPriority | recycleCampaign | setCampaignDialingMode).`,
 				Required:     true,
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"turnOnCampaign", "turnOffCampaign", "turnOnSequence", "turnOffSequence", "setCampaignPriority", "recycleCampaign", "setCampaignDialingMode"}, true),
+				ValidateFunc: validation.StringInSlice(getAllowedActions(), true),
 			},
 			`campaign_rule_action_entities`: {
 				Description: `The list of entities that this action will apply to.`,

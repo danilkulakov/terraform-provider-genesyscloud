@@ -102,9 +102,14 @@ Optional:
 
 Optional:
 
+- `abandon_rate` (Number) Compliance Abandon Rate. Required for 'setCampaignAbandonRate' action
 - `dialing_mode` (String) The dialing mode to set a campaign to. Required for the 'setCampaignDialingMode' action (agentless | preview | power | predictive | progressive | external).
+- `max_calls_per_agent` (Number) Max calls per agent. Optional parameter for 'setCampaignMaxCallsPerAgent' action
 - `operator` (String) The operator for comparison. Required for a CampaignRuleCondition.
+- `outbound_line_count` (Number) Number of Outbound lines. Required for 'setCampaignNumberOfLines' action
 - `priority` (String) The priority to set a campaign to (1 | 2 | 3 | 4 | 5). Required for the 'setCampaignPriority' action.
+- `queue_id` (String) The ID of the Queue. Required for 'changeCampaignQueue' action
+- `relative_weight` (Number) Relative weight. Required for 'setCampaignWeight' action
 - `value` (String) The value for comparison. Required for a CampaignRuleCondition.
 
 
@@ -126,9 +131,14 @@ Optional:
 
 Optional:
 
+- `abandon_rate` (Number) Compliance Abandon Rate. Required for 'setCampaignAbandonRate' action
 - `dialing_mode` (String) The dialing mode to set a campaign to. Required for the 'setCampaignDialingMode' action (agentless | preview | power | predictive | progressive | external).
+- `max_calls_per_agent` (Number) Max calls per agent. Optional parameter for 'setCampaignMaxCallsPerAgent' action
 - `operator` (String) The operator for comparison. Required for a CampaignRuleCondition.
+- `outbound_line_count` (Number) Number of Outbound lines. Required for 'setCampaignNumberOfLines' action
 - `priority` (String) The priority to set a campaign to (1 | 2 | 3 | 4 | 5). Required for the 'setCampaignPriority' action.
+- `queue_id` (String) The ID of the Queue. Required for 'changeCampaignQueue' action
+- `relative_weight` (Number) Relative weight. Required for 'setCampaignWeight' action
 - `value` (String) The value for comparison. Required for a CampaignRuleCondition.
 
 
