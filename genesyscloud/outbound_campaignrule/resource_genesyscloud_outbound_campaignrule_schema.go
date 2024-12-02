@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"strings"
 )
 
 /*
@@ -33,6 +34,19 @@ func getAllowedActions() []string {
 		"setCampaignWeight",
 		"setCampaignMaxCallsPerAgent",
 		"changeCampaignQueue",
+	}
+}
+
+func getAllowedConditions() []string {
+	return []string{
+		"campaignProgress",
+		"campaignAgents",
+		"campaignRecordsAttempted",
+		"campaignBusinessSuccess",
+		"campaignBusinessNeutral",
+		"campaignBusinessFailure",
+		"campaignValidAttempts",
+		"campaignRightPartyContacts",
 	}
 }
 
@@ -155,10 +169,10 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 				Elem:        campaignRuleParameters,
 			},
 			`condition_type`: {
-				Description:  `The type of condition to evaluate (campaignProgress | campaignAgents).`,
+				Description:  `The type of condition to evaluate (` + strings.Join(getAllowedConditions(), ` | `) + `)`,
 				Required:     true,
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"campaignProgress", "campaignAgents"}, true),
+				ValidateFunc: validation.StringInSlice(getAllowedConditions(), true),
 			},
 		},
 	}
@@ -178,8 +192,7 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 				Elem:        campaignRuleParameters,
 			},
 			`action_type`: {
-				Description: `The action to take on the campaignRuleActionEntities
-(turnOnCampaign | turnOffCampaign | turnOnSequence | turnOffSequence | setCampaignPriority | recycleCampaign | setCampaignDialingMode).`,
+				Description:  `The action to take on the campaignRuleActionEntities (` + strings.Join(getAllowedActions(), ` | `) + `)`,
 				Required:     true,
 				Type:         schema.TypeString,
 				ValidateFunc: validation.StringInSlice(getAllowedActions(), true),
