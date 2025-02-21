@@ -42,6 +42,7 @@ func getAllowedConditions() []string {
 		"campaignProgress",
 		"campaignAgents",
 		"campaignRecordsAttempted",
+		"campaignContactsMessaged",
 		"campaignBusinessSuccess",
 		"campaignBusinessNeutral",
 		"campaignBusinessFailure",
@@ -53,8 +54,25 @@ func getAllowedConditions() []string {
 var (
 	outboundCampaignRuleEntities = &schema.Resource{
 		Schema: map[string]*schema.Schema{
-			`campaign_ids`: outboundCampaignRuleEntityCampaignRuleId,
-			`sequence_ids`: outboundCampaignRuleEntitySequenceRuleId,
+			`campaign_ids`:        outboundCampaignRuleEntityCampaignRuleId,
+			`sequence_ids`:        outboundCampaignRuleEntitySequenceRuleId,
+			`email_campaigns_ids`: outboundCampaignRuleEntityEmailCampaignRuleId,
+			`sms_campaigns_ids`:   outboundCampaignRuleEntitySmsCampaignRuleId,
+		},
+	}
+
+	outboundCampaignRuleExecutionSettings = &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			`frequency`: {
+				Description:  `Execution control frequency.`,
+				Required:     true,
+				Type:         schema.TypeString,
+				ValidateFunc: validation.StringInSlice([]string{`oncePerDay`, `onEachTrigger`}, true),
+			},
+			`time_zone_id`: {
+				Description: `The time zone for the execution control frequency="oncePerDay"; for example, Africa/Abidjan. This property is ignored when frequency is not "oncePerDay".`,
+				Type:        schema.TypeString,
+			},
 		},
 	}
 
@@ -74,10 +92,28 @@ var (
 		Elem:        &schema.Schema{Type: schema.TypeString},
 	}
 
+	outboundCampaignRuleEntityEmailCampaignRuleId = &schema.Schema{
+		Description: `The list of Email campaigns for a CampaignRule to monitor. Required if the CampaignRule has any conditions that run on a Email campaign. Changing the outboundCampaignRuleEntityCampaignRuleId attribute will cause the outbound_campaignrule object to be dropped and recreated with a new ID.`,
+		Optional:    true,
+		ForceNew:    true,
+		Type:        schema.TypeList,
+		Elem:        &schema.Schema{Type: schema.TypeString},
+	}
+
+	outboundCampaignRuleEntitySmsCampaignRuleId = &schema.Schema{
+		Description: `The list of SMS campaigns for a CampaignRule to monitor. Required if the CampaignRule has any conditions that run on a SMS campaign. Changing the outboundCampaignRuleEntityCampaignRuleId attribute will cause the outbound_campaignrule object to be dropped and recreated with a new ID.`,
+		Optional:    true,
+		ForceNew:    true,
+		Type:        schema.TypeList,
+		Elem:        &schema.Schema{Type: schema.TypeString},
+	}
+
 	outboundCampaignRuleActionEntities = &schema.Resource{
 		Schema: map[string]*schema.Schema{
-			`campaign_ids`: outboundCampaignRuleEntityCampaignRuleId,
-			`sequence_ids`: outboundCampaignRuleEntitySequenceRuleId,
+			`campaign_ids`:        outboundCampaignRuleEntityCampaignRuleId,
+			`sequence_ids`:        outboundCampaignRuleEntitySequenceRuleId,
+			`email_campaigns_ids`: outboundCampaignRuleEntityEmailCampaignRuleId,
+			`sms_campaigns_ids`:   outboundCampaignRuleEntitySmsCampaignRuleId,
 			`use_triggering_entity`: {
 				Description: `If true, the CampaignRuleAction will apply to the same entity that triggered the CampaignRuleCondition.`,
 				Optional:    true,
@@ -143,11 +179,39 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 			`max_calls_per_agent`: {
 				Description:  `Max calls per agent. Optional parameter for 'setCampaignMaxCallsPerAgent' action`,
 				Optional:     true,
-				Type:         schema.TypeInt,
-				ValidateFunc: validation.IntAtLeast(0),
+				Type:         schema.TypeFloat,
+				ValidateFunc: validation.FloatAtLeast(1.0),
 			},
 			`queue_id`: {
 				Description: `The ID of the Queue. Required for 'changeCampaignQueue' action`,
+				Optional:    true,
+				Type:        schema.TypeString,
+			},
+			`messages_per_minute`: {
+				Description:  `The number of messages per minute to set a messaging campaign to.`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntAtLeast(0),
+			},
+			`sms_messages_per_minute`: {
+				Description:  `The number of messages per minute to set a SMS messaging campaign to.`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntAtLeast(0),
+			},
+			`email_messages_per_minute`: {
+				Description:  `The number of messages per minute to set an Email messaging campaign to.`,
+				Optional:     true,
+				Type:         schema.TypeInt,
+				ValidateFunc: validation.IntAtLeast(0),
+			},
+			`sms_content_template`: {
+				Description: `The content template to set a SMS campaign to.`,
+				Optional:    true,
+				Type:        schema.TypeString,
+			},
+			`email_content_template`: {
+				Description: `The content template to set an Email campaign to.`,
 				Optional:    true,
 				Type:        schema.TypeString,
 			},
@@ -173,6 +237,24 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 				Required:     true,
 				Type:         schema.TypeString,
 				ValidateFunc: validation.StringInSlice(getAllowedConditions(), true),
+			},
+		},
+	}
+
+	outboundCampaignRuleConditionGroup := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			`match_any_conditions`: {
+				Description: `Whether actions are executed if any condition is met, or only when all conditions are met.`,
+				Required:    true,
+				Default:     false,
+				Type:        schema.TypeBool,
+			},
+			`conditions`: {
+				Description: `The list of conditions that are evaluated on the entities.`,
+				Required:    true,
+				MinItems:    1,
+				Type:        schema.TypeList,
+				Elem:        outboundCampaignRuleCondition,
 			},
 		},
 	}
@@ -233,7 +315,6 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 			`campaign_rule_conditions`: {
 				Description: `The list of conditions that are evaluated on the entities.`,
 				Required:    true,
-				MinItems:    1,
 				Type:        schema.TypeList,
 				Elem:        outboundCampaignRuleCondition,
 			},
@@ -254,6 +335,26 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 				Optional:    true,
 				Default:     false,
 				Type:        schema.TypeBool,
+			},
+			`campaign_rule_processing`: {
+				Description:  `CampaignRule processing algorithm.`,
+				Optional:     true,
+				Type:         schema.TypeString,
+				ValidateFunc: validation.StringInSlice([]string{`V2`}, true),
+			},
+			`condition_groups`: {
+				Description: `List of condition groups that are evaluated, used only with campaignRuleProcessing="v2"`,
+				Required:    true,
+				MinItems:    1,
+				Type:        schema.TypeList,
+				Elem:        outboundCampaignRuleConditionGroup,
+			},
+			`execution_settings`: {
+				Description: `Campaign rule execution settings.`,
+				Required:    true,
+				MaxItems:    1,
+				Type:        schema.TypeList,
+				Elem:        outboundCampaignRuleExecutionSettings,
 			},
 		},
 	}
