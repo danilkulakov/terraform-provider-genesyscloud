@@ -2,12 +2,14 @@ package outbound_campaign
 
 import (
 	"fmt"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
+	"path/filepath"
 	"testing"
 
-	authDivision "terraform-provider-genesyscloud/genesyscloud/auth_division"
-	edgeSite "terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
+	authDivision "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/auth_division"
+	edgeSite "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -18,7 +20,7 @@ func TestAccDataSourceOutboundCampaign(t *testing.T) {
 		resourceLabel        = "campaign"
 		campaignName         = "Test Campaign " + uuid.NewString()
 		dataSourceLabel      = "campaign_data"
-		outboundFlowFilePath = "../../examples/resources/genesyscloud_flow/outboundcall_flow_example.yaml"
+		outboundFlowFilePath = filepath.Join(testrunner.RootDir, "examples/resources/genesyscloud_flow/outboundcall_flow_example.yaml")
 		divResourceLabel     = "test-outbound-campaign-division"
 		divName              = "terraform-" + uuid.NewString()
 	)

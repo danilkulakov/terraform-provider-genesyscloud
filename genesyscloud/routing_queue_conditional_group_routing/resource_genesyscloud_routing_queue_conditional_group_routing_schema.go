@@ -1,9 +1,9 @@
 package routing_queue_conditional_group_routing
 
 import (
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	registrar "terraform-provider-genesyscloud/genesyscloud/resource_register"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	registrar "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_register"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -95,7 +95,7 @@ func ResourceRoutingQueueConditionalGroupRouting() *schema.Resource {
 							ValidateFunc: validation.IntBetween(0, 259200),
 						},
 						"groups": {
-							Type:        schema.TypeList,
+							Type:        schema.TypeSet,
 							Required:    true,
 							MinItems:    1,
 							Description: "The group(s) to activate if the rule evaluates as true.",

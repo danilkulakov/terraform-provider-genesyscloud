@@ -3,21 +3,24 @@ package util
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
+	prl "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/panic_recovery_logger"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func WithRetries(ctx context.Context, timeout time.Duration, method func() *retry.RetryError) diag.Diagnostics {
+	method = wrapReadMethodWithRecover(method)
 	err := diag.FromErr(retry.RetryContext(ctx, timeout, method))
 	if err != nil && strings.Contains(fmt.Sprintf("%v", err), "timeout while waiting for state to become") {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -32,11 +35,13 @@ func WithRetriesForRead(ctx context.Context, d *schema.ResourceData, method func
 }
 
 func WithRetriesForReadCustomTimeout(ctx context.Context, timeout time.Duration, d *schema.ResourceData, method func() *retry.RetryError) diag.Diagnostics {
+	method = wrapReadMethodWithRecover(method)
 	err := diag.FromErr(retry.RetryContext(ctx, timeout, method))
 	if err != nil {
 		if strings.Contains(fmt.Sprintf("%v", err), "API Error: 404") {
 			// Set ID empty if the object isn't found after the specified timeout
 			d.SetId("")
+			return nil
 		}
 		errStringLower := strings.ToLower(fmt.Sprintf("%v", err))
 		if strings.Contains(errStringLower, "timeout while waiting for state to become") ||
@@ -52,14 +57,43 @@ func WithRetriesForReadCustomTimeout(ctx context.Context, timeout time.Duration,
 	return err
 }
 
+// wrapReadMethodWithRecover will wrap the method with a recover if the panic recovery logger is enabled
+func wrapReadMethodWithRecover(method func() *retry.RetryError) func() *retry.RetryError {
+	return func() (retryErr *retry.RetryError) {
+		defer func() {
+			panicRecoveryLogger := prl.GetPanicRecoveryLoggerInstance()
+			if !panicRecoveryLogger.LoggerEnabled {
+				return
+			}
+			if r := recover(); r != nil {
+				err := panicRecoveryLogger.HandleRecovery(r, constants.Read)
+				if err != nil {
+					retryErr = retry.NonRetryableError(err)
+				}
+			}
+		}()
+		return method()
+	}
+}
+
 type checkResponseFunc func(resp *platformclientv2.APIResponse, additionalCodes ...int) bool
 type callSdkFunc func() (*platformclientv2.APIResponse, diag.Diagnostics)
 
-// Retries up to 10 times while the shouldRetry condition returns true
+var maxRetries = 10
+
+func SetMaxRetriesForTests(retries int) (previous int) {
+	previous = maxRetries
+	if retries > 0 {
+		maxRetries = retries
+	}
+	return previous
+}
+
+// RetryWhen Retries up to 10 times while the shouldRetry condition returns true
 // Useful for adding custom retry logic to normally non-retryable error codes
 func RetryWhen(shouldRetry checkResponseFunc, callSdk callSdkFunc, additionalCodes ...int) diag.Diagnostics {
 	var lastErr diag.Diagnostics
-	for i := 0; i < 10; i++ {
+	for i := 0; i < maxRetries; i++ {
 		resp, sdkErr := callSdk()
 		if sdkErr != nil {
 			if resp != nil && shouldRetry(resp, additionalCodes...) {
@@ -135,13 +169,6 @@ func IsStatus400(resp *platformclientv2.APIResponse, additionalCodes ...int) boo
 	return false
 }
 
-func GetBody(apiResponse *platformclientv2.APIResponse) string {
-	if apiResponse != nil {
-		return string(apiResponse.RawBody)
-	}
-	return ""
-}
-
 func IsStatus409(resp *platformclientv2.APIResponse, additionalCodes ...int) bool {
 	if resp != nil {
 		if resp.StatusCode == http.StatusConflict ||
@@ -161,15 +188,5 @@ func IsStatus412(resp *platformclientv2.APIResponse, additionalCodes ...int) boo
 			return true
 		}
 	}
-	return false
-}
-
-func IsStatus412ByInt(respCode int, additionalCodes ...int) bool {
-	if respCode == http.StatusPreconditionFailed ||
-		respCode == http.StatusRequestTimeout ||
-		IsAdditionalCode(respCode, additionalCodes...) {
-		return true
-	}
-
 	return false
 }

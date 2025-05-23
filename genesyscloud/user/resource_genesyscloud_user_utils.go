@@ -4,17 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	chunksProcess "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/chunks"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
 	"log"
 	"net/mail"
 	"sort"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	chunksProcess "terraform-provider-genesyscloud/genesyscloud/util/chunks"
-	"terraform-provider-genesyscloud/genesyscloud/util/lists"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 	"github.com/nyaruka/phonenumbers"
 )
 
@@ -86,7 +86,7 @@ func executeUpdateUser(ctx context.Context, d *schema.ResourceData, proxy *userP
 	})
 }
 
-func executeAllUpdates(d *schema.ResourceData, proxy *userProxy, sdkConfig *platformclientv2.Configuration, updateObjectDivision bool) diag.Diagnostics {
+func executeAllUpdates(ctx context.Context, d *schema.ResourceData, proxy *userProxy, sdkConfig *platformclientv2.Configuration, updateObjectDivision bool) diag.Diagnostics {
 
 	if updateObjectDivision {
 		diagErr := util.UpdateObjectDivision(d, "USER", sdkConfig)
@@ -115,40 +115,77 @@ func executeAllUpdates(d *schema.ResourceData, proxy *userProxy, sdkConfig *plat
 		return diagErr
 	}
 
+	diagErr = updateUserVoicemailPolicies(d, proxy)
+	if diagErr != nil {
+		return diagErr
+	}
+
+	diagErr = updatePassword(ctx, d, proxy)
+	if diagErr != nil {
+		return diagErr
+	}
+
 	return nil
 }
 
 func updateUserSkills(d *schema.ResourceData, proxy *userProxy) diag.Diagnostics {
-	transformFunc := func(configSkill interface{}) platformclientv2.Userroutingskillpost {
-		skillMap := configSkill.(map[string]interface{})
-		skillID := skillMap["skill_id"].(string)
-		skillProf := skillMap["proficiency"].(float64)
-
-		return platformclientv2.Userroutingskillpost{
-			Id:          &skillID,
-			Proficiency: &skillProf,
-		}
-	}
-
-	chunkProcessor := func(chunk []platformclientv2.Userroutingskillpost) diag.Diagnostics {
-		diagErr := util.RetryWhen(util.IsVersionMismatch, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
-			_, resp, err := proxy.userApi.PatchUserRoutingskillsBulk(d.Id(), chunk)
-			if err != nil {
-				return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update skills for user %s error: %s", d.Id(), err), resp)
-			}
-			return nil, nil
-		})
-		if diagErr != nil {
-			return diagErr
-		}
-		return nil
-	}
-
 	if d.HasChange("routing_skills") {
 		if skillsConfig := d.Get("routing_skills"); skillsConfig != nil {
-			skillsList := skillsConfig.(*schema.Set).List()
-			chunks := chunksProcess.ChunkItems(skillsList, transformFunc, 50)
-			return chunksProcess.ProcessChunks(chunks, chunkProcessor)
+			log.Printf("Updating skills for user %s", d.Get("email"))
+			newSkillProfs := make(map[string]float64)
+			skillList := skillsConfig.(*schema.Set).List()
+			newSkillIds := make([]string, len(skillList))
+			for i, skill := range skillList {
+				skillMap := skill.(map[string]interface{})
+				newSkillIds[i] = skillMap["skill_id"].(string)
+				newSkillProfs[newSkillIds[i]] = skillMap["proficiency"].(float64)
+			}
+
+			oldSdkSkills, err := getUserRoutingSkills(d.Id(), proxy)
+			if err != nil {
+				return err
+			}
+
+			oldSkillIds := make([]string, len(oldSdkSkills))
+			oldSkillProfs := make(map[string]float64)
+			for i, skill := range oldSdkSkills {
+				oldSkillIds[i] = *skill.Id
+				oldSkillProfs[oldSkillIds[i]] = *skill.Proficiency
+			}
+
+			if len(oldSkillIds) > 0 {
+				skillsToRemove := lists.SliceDifference(oldSkillIds, newSkillIds)
+				for _, skillId := range skillsToRemove {
+					diagErr := util.RetryWhen(util.IsVersionMismatch, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+						resp, err := proxy.userApi.DeleteUserRoutingskill(d.Id(), skillId)
+						if err != nil {
+							return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to remove skill from user %s error: %s", d.Id(), err), resp)
+						}
+						return nil, nil
+					})
+					if diagErr != nil {
+						return diagErr
+					}
+				}
+			}
+
+			if len(newSkillIds) > 0 {
+				// skills to add
+				skillsToAddOrUpdate := lists.SliceDifference(newSkillIds, oldSkillIds)
+				// Check for existing proficiencies to update which can be done with the same API
+				for langID, newNum := range newSkillProfs {
+					if oldNum, found := oldSkillProfs[langID]; found {
+						if newNum != oldNum {
+							skillsToAddOrUpdate = append(skillsToAddOrUpdate, langID)
+						}
+					}
+				}
+
+				if diagErr := updateUserRoutingSkills(d.Id(), skillsToAddOrUpdate, newSkillProfs, proxy); diagErr != nil {
+					return diagErr
+				}
+			}
+
 		}
 	}
 	return nil
@@ -236,6 +273,27 @@ func updateUserProfileSkills(d *schema.ResourceData, proxy *userProxy) diag.Diag
 	return nil
 }
 
+func updateUserVoicemailPolicies(d *schema.ResourceData, proxy *userProxy) diag.Diagnostics {
+	if !d.HasChange("voicemail_userpolicies") {
+		return nil
+	}
+
+	voicemailUserpolicies := d.Get("voicemail_userpolicies").([]interface{})
+	reqBody := buildVoicemailUserpoliciesRequest(voicemailUserpolicies)
+	diagErr := util.RetryWhen(util.IsVersionMismatch, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		_, proxyPutResponse, putErr := proxy.voicemailApi.PatchVoicemailUserpolicy(d.Id(), reqBody)
+		if putErr != nil {
+			return proxyPutResponse, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update voicemail userpolicices for user %s error: %s", d.Id(), putErr), proxyPutResponse)
+		}
+		return nil, nil
+	})
+	if diagErr != nil {
+		return diagErr
+	}
+
+	return nil
+}
+
 func updateUserRoutingUtilization(d *schema.ResourceData, proxy *userProxy) diag.Diagnostics {
 	if d.HasChange("routing_utilization") {
 		if utilConfig := d.Get("routing_utilization").([]interface{}); utilConfig != nil {
@@ -287,6 +345,60 @@ func updateUserRoutingUtilization(d *schema.ResourceData, proxy *userProxy) diag
 	return nil
 }
 
+func updatePassword(ctx context.Context, d *schema.ResourceData, proxy *userProxy) diag.Diagnostics {
+	if !d.HasChange("password") {
+		return nil
+	}
+
+	password := d.Get("password").(string)
+
+	if password == "" {
+		return nil // Skip password update if empty
+	}
+
+	_, err := proxy.updatePassword(ctx, d.Id(), password)
+	if err != nil {
+		return util.BuildDiagnosticError(ResourceType, fmt.Sprintf("Failed to update password for user %s", d.Id()), err)
+	}
+
+	return nil
+}
+
+func updateUserRoutingSkills(userID string, skillsToUpdate []string, skillProfs map[string]float64, proxy *userProxy) diag.Diagnostics {
+	// Bulk API restricts skills adds to 50 per call
+	const maxBatchSize = 50
+
+	chunkBuild := func(val string) platformclientv2.Userroutingskillpost {
+		newProf := skillProfs[val]
+		return platformclientv2.Userroutingskillpost{
+			Id:          &val,
+			Proficiency: &newProf,
+		}
+	}
+
+	// Generic call to prepare chunks for the Update. Takes in three args
+	// 1. skillsToUpdate 2. The Entity prepare func for the update 3. Chunk Size
+	chunks := chunksProcess.ChunkItems(skillsToUpdate, chunkBuild, maxBatchSize)
+	// Closure to process the chunks
+
+	chunkProcessor := func(chunk []platformclientv2.Userroutingskillpost) diag.Diagnostics {
+		diagErr := util.RetryWhen(util.IsVersionMismatch, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+			_, resp, err := proxy.userApi.PatchUserRoutingskillsBulk(userID, chunk)
+			if err != nil {
+				return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update languages for user %s error: %s", userID, err), resp)
+			}
+			return nil, nil
+		})
+		if diagErr != nil {
+			return diagErr
+		}
+		return nil
+	}
+
+	// Generic Function call which takes in the chunks and the processing function
+	return chunksProcess.ProcessChunks(chunks, chunkProcessor)
+}
+
 func updateUserRoutingLanguages(userID string, langsToUpdate []string, langProfs map[string]int, proxy *userProxy) diag.Diagnostics {
 	// Bulk API restricts language adds to 50 per call
 	const maxBatchSize = 50
@@ -336,6 +448,23 @@ func getUserRoutingLanguages(userID string, proxy *userProxy) ([]platformclientv
 		}
 
 		sdkLanguages = append(sdkLanguages, *langs.Entities...)
+	}
+}
+
+func getUserRoutingSkills(userID string, proxy *userProxy) ([]platformclientv2.Userroutingskill, diag.Diagnostics) {
+	const maxPageSize = 50
+
+	var sdkSkills []platformclientv2.Userroutingskill
+	for pageNum := 1; ; pageNum++ {
+		skills, resp, err := proxy.userApi.GetUserRoutingskills(userID, maxPageSize, pageNum, "")
+		if err != nil {
+			return nil, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to query languages for user %s error: %s", userID, err), resp)
+		}
+		if skills == nil || skills.Entities == nil || len(*skills.Entities) == 0 {
+			return sdkSkills, nil
+		}
+
+		sdkSkills = append(sdkSkills, *skills.Entities...)
 	}
 }
 
@@ -451,7 +580,9 @@ func phoneNumberHash(val interface{}) int {
 	// Copy map to avoid modifying state
 	phoneMap := make(map[string]interface{})
 	for k, v := range val.(map[string]interface{}) {
-		phoneMap[k] = v
+		if k != "extension_pool_id" {
+			phoneMap[k] = v
+		}
 	}
 	if num, ok := phoneMap["number"]; ok {
 		// Attempt to format phone numbers before hashing
@@ -589,7 +720,20 @@ func getNumbers(d *schema.ResourceData, index int) (bool, bool) {
 	return isNumber, isExtension
 }
 
-func flattenUserAddresses(d *schema.ResourceData, addresses *[]platformclientv2.Contact) []interface{} {
+func fetchExtensionPoolId(ctx context.Context, extNum string, proxy *userProxy) string {
+	ext, getErr, err := proxy.getTelephonyExtensionPoolByExtension(ctx, extNum)
+	if err != nil {
+		if getErr != nil {
+			log.Printf("Failed to fetch extension pools. Status: %d. Error: %s", getErr.StatusCode, getErr.ErrorMessage)
+			return ""
+		}
+		log.Printf("Failed to fetch extension pool id for extension %s. Error: %s", extNum, err)
+		return ""
+	}
+	return *ext.Id
+}
+
+func flattenUserAddresses(ctx context.Context, addresses *[]platformclientv2.Contact, proxy *userProxy) []interface{} {
 	if addresses == nil || len(*addresses) == 0 {
 		return nil
 	}
@@ -604,6 +748,7 @@ func flattenUserAddresses(d *schema.ResourceData, addresses *[]platformclientv2.
 			if *address.MediaType == "SMS" || *address.MediaType == "PHONE" {
 				phoneNumber := make(map[string]interface{})
 				phoneNumber["media_type"] = *address.MediaType
+				phoneNumber["extension_pool_id"] = ""
 
 				// PHONE and SMS Addresses have four different ways they can return in the API
 				// We need to be able to handle them all, and strip off any parentheses that can surround
@@ -619,7 +764,9 @@ func flattenUserAddresses(d *schema.ResourceData, addresses *[]platformclientv2.
 				if address.Extension != nil {
 					if address.Display != nil {
 						if *address.Extension == *address.Display {
-							phoneNumber["extension"] = strings.Trim(*address.Extension, "()")
+							extensionNum := strings.Trim(*address.Extension, "()")
+							phoneNumber["extension"] = extensionNum
+							phoneNumber["extension_pool_id"] = fetchExtensionPoolId(ctx, extensionNum, proxy)
 						}
 					}
 				}
@@ -871,6 +1018,37 @@ func getSdkUtilizationTypes() []string {
 	return types
 }
 
+func buildVoicemailUserpoliciesRequest(voicemailUserpolicies []interface{}) platformclientv2.Voicemailuserpolicy {
+	var request platformclientv2.Voicemailuserpolicy
+	if extractMap, ok := voicemailUserpolicies[0].(map[string]interface{}); ok {
+		sendEmailNotifications := extractMap["send_email_notifications"].(bool)
+		request = platformclientv2.Voicemailuserpolicy{
+			SendEmailNotifications: &sendEmailNotifications,
+		}
+		// Optional
+		if alertTimeoutSeconds := extractMap["alert_timeout_seconds"].(int); alertTimeoutSeconds > 0 {
+			request.AlertTimeoutSeconds = &alertTimeoutSeconds
+		}
+	}
+	return request
+}
+
+func flattenVoicemailUserpolicies(d *schema.ResourceData, voicemail *platformclientv2.Voicemailuserpolicy) []interface{} {
+	if voicemail == nil {
+		return nil
+	}
+
+	voicemailUserpolicy := make(map[string]interface{})
+	if voicemail.AlertTimeoutSeconds != nil {
+		voicemailUserpolicy["alert_timeout_seconds"] = *voicemail.AlertTimeoutSeconds
+	}
+	if voicemail.SendEmailNotifications != nil {
+		voicemailUserpolicy["send_email_notifications"] = *voicemail.SendEmailNotifications
+	}
+
+	return []interface{}{voicemailUserpolicy}
+}
+
 func generateRoutingUtilMediaType(
 	mediaType string,
 	maxCapacity string,
@@ -934,4 +1112,12 @@ func GenerateUserResource(resourceLabel string, email string, name string, state
 		certifications = [%s]
 	}
 	`, ResourceType, resourceLabel, email, name, state, title, department, manager, acdAutoAnswer, profileSkills, certifications)
+}
+
+func GenerateVoicemailUserpolicies(timeout int, sendEmailNotifications bool) string {
+	return fmt.Sprintf(`voicemail_userpolicies {
+		alert_timeout_seconds = %d
+		send_email_notifications = %t
+	}
+	`, timeout, sendEmailNotifications)
 }

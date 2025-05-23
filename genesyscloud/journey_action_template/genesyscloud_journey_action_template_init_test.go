@@ -1,15 +1,15 @@
 package journey_action_template
 
 import (
+	journeyActionMap "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/journey_action_map"
+	journeySegment "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/journey_segment"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"log"
 	"sync"
-	gcloud "terraform-provider-genesyscloud/genesyscloud"
-	"terraform-provider-genesyscloud/genesyscloud/journey_action_map"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 var (
@@ -39,8 +39,8 @@ func (r *registerTestInstance) registerTestResources() {
 	defer r.resourceMapMutex.Unlock()
 
 	providerResources[ResourceType] = ResourceJourneyActionTemplate()
-	providerResources[journey_action_map.ResourceType] = journey_action_map.ResourceJourneyActionMap()
-	providerResources["genesyscloud_journey_segment"] = gcloud.ResourceJourneySegment()
+	providerResources[journeyActionMap.ResourceType] = journeyActionMap.ResourceJourneyActionMap()
+	providerResources[journeySegment.ResourceType] = journeySegment.ResourceJourneySegment()
 }
 
 // registerTestDataSources registers all data sources used in the tests.

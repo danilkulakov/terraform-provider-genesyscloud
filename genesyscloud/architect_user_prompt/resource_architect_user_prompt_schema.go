@@ -1,10 +1,10 @@
 package architect_user_prompt
 
 import (
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	registrar "terraform-provider-genesyscloud/genesyscloud/resource_register"
-	architectlanguages "terraform-provider-genesyscloud/genesyscloud/util/architectlanguages"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	registrar "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_register"
+	architectlanguages "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/architectlanguages"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -22,6 +22,7 @@ func SetRegistrar(regInstance registrar.Registrar) {
 func ArchitectUserPromptExporter() *resourceExporter.ResourceExporter {
 	return &resourceExporter.ResourceExporter{
 		GetResourcesFunc: provider.GetAllWithPooledClient(getAllUserPrompts),
+		AllowEmptyArrays: []string{"resources"},
 		RefAttrs:         map[string]*resourceExporter.RefAttrSettings{}, // No references
 		CustomFileWriter: resourceExporter.CustomFileWriterSettings{
 			RetrieveAndWriteFilesFunc: ArchitectPromptAudioResolver,
@@ -49,7 +50,7 @@ var userPromptResource = &schema.Resource{
 		"language": {
 			Description:  "Language for the prompt resource. (eg. en-us)",
 			Type:         schema.TypeString,
-			Required:     true,
+			Optional:     true,
 			ValidateFunc: validation.StringInSlice(architectlanguages.Languages, false),
 		},
 		"tts_string": {

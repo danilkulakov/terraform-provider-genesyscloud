@@ -1,10 +1,10 @@
 package knowledge_document
 
 import (
+	knowledgeCategory "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_category"
+	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
+	knowledgeLabel "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_label"
 	"sync"
-	gcloud "terraform-provider-genesyscloud/genesyscloud"
-	knowledgeCategory "terraform-provider-genesyscloud/genesyscloud/knowledge_category"
-	knowledgeLabel "terraform-provider-genesyscloud/genesyscloud/knowledge_label"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -29,7 +29,7 @@ func (r *registerTestInstance) registerTestResources() {
 	r.resourceMapMutex.Lock()
 	defer r.resourceMapMutex.Unlock()
 	providerResources[knowledgeCategory.ResourceType] = knowledgeCategory.ResourceKnowledgeCategory()
-	providerResources["genesyscloud_knowledge_knowledgebase"] = gcloud.ResourceKnowledgeKnowledgebase()
+	providerResources["genesyscloud_knowledge_knowledgebase"] = knowledgeKnowledgebase.ResourceKnowledgeKnowledgebase()
 	providerResources[knowledgeLabel.ResourceType] = knowledgeLabel.ResourceKnowledgeLabel()
 	providerResources[ResourceType] = ResourceKnowledgeDocument()
 }

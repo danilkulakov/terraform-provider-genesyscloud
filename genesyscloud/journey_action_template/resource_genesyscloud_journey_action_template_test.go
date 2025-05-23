@@ -2,17 +2,17 @@ package journey_action_template
 
 import (
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"log"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
-	"terraform-provider-genesyscloud/genesyscloud/util/testrunner"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func TestAccResourceJourneyActionTemplate(t *testing.T) {
@@ -25,7 +25,7 @@ func runJourneyActionTemplateTestCase(t *testing.T, testCaseName string) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { util.TestAccPreCheck(t) },
 		ProviderFactories: provider.GetProviderFactories(providerResources, providerDataSources),
-		Steps:             testrunner.GenerateResourceTestSteps(ResourceType, testCaseName, nil),
+		Steps:             testrunner.GenerateResourceJourneyTestSteps(ResourceType, testCaseName, nil),
 		CheckDestroy:      testVerifyJourneyActionTemplatesDestroyed,
 	})
 }

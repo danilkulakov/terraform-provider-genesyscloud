@@ -3,12 +3,13 @@ package scripts
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
 	"log"
 	"os"
 	"path"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"terraform-provider-genesyscloud/genesyscloud/util/files"
+	"path/filepath"
 )
 
 // ScriptResolver is used to download all Genesys Cloud scripts from Genesys Cloud
@@ -18,7 +19,7 @@ func ScriptResolver(scriptId, exportDirectory, subDirectory string, configMap ma
 
 	exportFileName := fmt.Sprintf("script-%s.json", scriptId)
 
-	fullPath := path.Join(exportDirectory, subDirectory)
+	fullPath := filepath.Join(exportDirectory, subDirectory)
 	if err := os.MkdirAll(fullPath, os.ModePerm); err != nil {
 		return err
 	}
@@ -28,23 +29,33 @@ func ScriptResolver(scriptId, exportDirectory, subDirectory string, configMap ma
 		return err
 	}
 
-	if err := files.DownloadExportFile(fullPath, exportFileName, url); err != nil {
+	if _, err := files.DownloadExportFile(fullPath, exportFileName, url); err != nil {
 		return err
 	}
 
 	// Update filepath field in configMap to point to exported script file
-	fileNameVal := path.Join(subDirectory, exportFileName)
-	fileContentVal := fmt.Sprintf(`${filesha256("%s")}`, path.Join(subDirectory, exportFileName))
+	fileNameVal := filepath.Join(subDirectory, exportFileName)
+	fileContentVal := fmt.Sprintf(`${filesha256("%s")}`, filepath.Join(subDirectory, exportFileName))
 	configMap["filepath"] = fileNameVal
 	configMap["file_content_hash"] = fileContentVal
 
 	resource.State.Attributes["filepath"] = fileNameVal
 
-	hash, er := files.HashFileContent(path.Join(fullPath, exportFileName))
-	if er != nil {
-		log.Printf("Error Calculating Hash '%s' ", er)
+	hash, err := files.HashFileContent(path.Join(fullPath, exportFileName))
+	if err != nil {
+		log.Printf("Error Calculating Hash '%s' ", err)
 	} else {
 		resource.State.Attributes["file_content_hash"] = hash
 	}
 	return err
+}
+
+func GenerateScriptResourceBasic(resourceLabel, scriptName, filePath string) string {
+	return fmt.Sprintf(`
+		resource "%s" "%s" {
+			script_name       = "%s"
+			filepath          = "%s"
+			file_content_hash = filesha256("%s")
+		}
+	`, ResourceType, resourceLabel, scriptName, filePath, filePath)
 }

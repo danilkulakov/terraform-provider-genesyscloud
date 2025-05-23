@@ -1,6 +1,7 @@
 package external_contacts
 
 import (
+	externalContactOrganization "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/external_contacts_organization"
 	"sync"
 	"testing"
 
@@ -31,6 +32,7 @@ func (r *registerTestInstance) registerTestResources() {
 	defer r.resourceMapMutex.Unlock()
 
 	providerResources[ResourceType] = ResourceExternalContact()
+	providerResources["genesyscloud_externalcontacts_organization"] = externalContactOrganization.ResourceExternalContactsOrganization()
 }
 
 // registerTestDataSources registers all data sources used in the tests.

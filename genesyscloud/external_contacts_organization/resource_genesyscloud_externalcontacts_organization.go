@@ -3,19 +3,19 @@ package external_contacts_organization
 import (
 	"context"
 	"fmt"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 	"log"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
 
-	"terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 )
@@ -26,23 +26,23 @@ The resource_genesyscloud_external_contacts_organization.go contains all of the 
 
 // getAllAuthExternalContactsOrganization retrieves all of the external contacts organization via Terraform in the Genesys Cloud and is used for the exporter
 func getAllAuthExternalContactsOrganizations(ctx context.Context, clientConfig *platformclientv2.Configuration) (resourceExporter.ResourceIDMetaMap, diag.Diagnostics) {
-	log.Println(ResourceType + " resources cannot be exported due to an API limitation.")
-	return nil, nil
 
-	// TODO uncomment once DEVTOOLING-977 has been resolved
-	//proxy := newExternalContactsOrganizationProxy(clientConfig)
-	//resources := make(resourceExporter.ResourceIDMetaMap)
+	proxy := getExternalContactsOrganizationProxy(clientConfig)
+	resources := make(resourceExporter.ResourceIDMetaMap)
 
-	//externalOrganizations, response, err := proxy.getAllExternalContactsOrganization(ctx, "")
-	//if err != nil {
-	//	return nil, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("failed to get external organization error: %s", err), response)
-	//}
-	//
-	//for _, externalOrganization := range *externalOrganizations {
-	//	resources[*externalOrganization.Id] = &resourceExporter.ResourceMeta{BlockLabel: *externalOrganization.Id}
-	//}
-	//
-	//return resources, nil
+	externalOrganizations, response, err := proxy.getAllExternalContactsOrganization(ctx)
+	if err != nil {
+		return nil, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("failed to get external organization error: %s", err), response)
+	}
+
+	for _, externalOrganization := range *externalOrganizations {
+		if externalOrganization.Id == nil {
+			continue
+		}
+		resources[*externalOrganization.Id] = &resourceExporter.ResourceMeta{BlockLabel: *externalOrganization.Id}
+	}
+
+	return resources, nil
 }
 
 // createExternalContactsOrganization is used by the external_contacts_organization resource to create Genesys cloud external contacts organization
@@ -87,7 +87,6 @@ func readExternalContactsOrganization(ctx context.Context, d *schema.ResourceDat
 		resourcedata.SetNillableValue(d, "name", externalOrganization.Name)
 		resourcedata.SetNillableValue(d, "company_type", externalOrganization.CompanyType)
 		resourcedata.SetNillableValue(d, "industry", externalOrganization.Industry)
-		resourcedata.SetNillableValue(d, "primary_contact_id", externalOrganization.PrimaryContactId)
 		resourcedata.SetNillableValueWithInterfaceArrayWithFunc(d, "address", externalOrganization.Address, flattenSdkAddress)
 		resourcedata.SetNillableValueWithInterfaceArrayWithFunc(d, "phone_number", externalOrganization.PhoneNumber, flattenPhoneNumber)
 		resourcedata.SetNillableValueWithInterfaceArrayWithFunc(d, "fax_number", externalOrganization.FaxNumber, flattenPhoneNumber)
@@ -122,7 +121,6 @@ func updateExternalContactsOrganization(ctx context.Context, d *schema.ResourceD
 	proxy := getExternalContactsOrganizationProxy(sdkConfig)
 
 	externalContactsOrganization, err := getExternalContactsOrganizationFromResourceData(d)
-
 	if err != nil {
 		return util.BuildDiagnosticError(ResourceType, fmt.Sprintf("failed to build external organization error: %s", err), nil)
 	}

@@ -2,11 +2,11 @@ package user
 
 import (
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	registrar "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_register"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/validators"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	registrar "terraform-provider-genesyscloud/genesyscloud/resource_register"
-	"terraform-provider-genesyscloud/genesyscloud/validators"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -48,6 +48,11 @@ var (
 			},
 			"extension": {
 				Description: "Phone number extension",
+				Type:        schema.TypeString,
+				Optional:    true,
+			},
+			"extension_pool_id": {
+				Description: "Id of the extension pool which contains this extension.",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
@@ -156,6 +161,21 @@ var (
 				Description: "Optional description on the user's location.",
 				Type:        schema.TypeString,
 				Optional:    true,
+			},
+		},
+	}
+	voicemailUserpoliciesResource = &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"alert_timeout_seconds": {
+				Description: "The number of seconds to ring the user's phone before a call is transferred to voicemail.",
+				Type:        schema.TypeInt,
+				Optional:    true,
+			},
+			"send_email_notifications": {
+				Description: "Whether email notifications are sent to the user when a new voicemail is received.",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
 			},
 		},
 	}
@@ -388,6 +408,14 @@ func ResourceUser() *schema.Resource {
 					},
 				},
 			},
+			"voicemail_userpolicies": {
+				Description: "User's voicemail policies. If not set, default user policies will be applied.",
+				Type:        schema.TypeList,
+				MaxItems:    1,
+				Optional:    true,
+				Computed:    true,
+				Elem:        voicemailUserpoliciesResource,
+			},
 		},
 	}
 }
@@ -415,17 +443,20 @@ func UserExporter() *resourceExporter.ResourceExporter {
 	return &resourceExporter.ResourceExporter{
 		GetResourcesFunc: provider.GetAllWithPooledClient(GetAllUsers),
 		RefAttrs: map[string]*resourceExporter.RefAttrSettings{
-			"manager":                       {RefType: ResourceType},
-			"division_id":                   {RefType: "genesyscloud_auth_division"},
-			"routing_skills.skill_id":       {RefType: "genesyscloud_routing_skill"},
-			"routing_languages.language_id": {RefType: "genesyscloud_routing_language"},
-			"locations.location_id":         {RefType: "genesyscloud_location"},
+			"manager":                                   {RefType: ResourceType},
+			"division_id":                               {RefType: "genesyscloud_auth_division"},
+			"routing_skills.skill_id":                   {RefType: "genesyscloud_routing_skill"},
+			"routing_languages.language_id":             {RefType: "genesyscloud_routing_language"},
+			"locations.location_id":                     {RefType: "genesyscloud_location"},
+			"addresses.phone_numbers.extension_pool_id": {RefType: "genesyscloud_telephony_providers_edges_extension_pool"},
 		},
 		RemoveIfMissing: map[string][]string{
-			"routing_skills":    {"skill_id"},
-			"routing_languages": {"language_id"},
-			"locations":         {"location_id"},
+			"routing_skills":         {"skill_id"},
+			"routing_languages":      {"language_id"},
+			"locations":              {"location_id"},
+			"voicemail_userpolicies": {"alert_timeout_seconds"},
 		},
-		AllowZeroValues: []string{"routing_skills.proficiency", "routing_languages.proficiency"},
+		AllowEmptyArrays: []string{"routing_skills", "routing_languages"},
+		AllowZeroValues:  []string{"routing_skills.proficiency", "routing_languages.proficiency"},
 	}
 }

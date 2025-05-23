@@ -1,11 +1,23 @@
 package outbound_contact_list
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func buildSdkOutboundContactListContactPhoneNumberColumnSlice(contactPhoneNumberColumn *schema.Set) *[]platformclientv2.Contactphonenumbercolumn {
@@ -65,14 +77,24 @@ func buildSdkOutboundContactListContactEmailAddressColumnSlice(contactEmailAddre
 	contactEmailAddressColumnList := contactEmailAddressColumn.List()
 	for _, configEmailColumn := range contactEmailAddressColumnList {
 		var sdkContactEmailAddressColumn platformclientv2.Emailcolumn
-		contactEmailAddressColumnMap := configEmailColumn.(map[string]interface{})
-		if columnName := contactEmailAddressColumnMap["column_name"].(string); columnName != "" {
+
+		contactEmailAddressColumnMap, ok := configEmailColumn.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Safely handle column_name
+		if columnName, ok := contactEmailAddressColumnMap["column_name"].(string); ok && columnName != "" {
 			sdkContactEmailAddressColumn.ColumnName = &columnName
 		}
-		if varType := contactEmailAddressColumnMap["type"].(string); varType != "" {
+
+		// Safely handle type
+		if varType, ok := contactEmailAddressColumnMap["type"].(string); ok && varType != "" {
 			sdkContactEmailAddressColumn.VarType = &varType
 		}
-		if contactableTimeColumn := contactEmailAddressColumnMap["contactable_time_column"].(string); contactableTimeColumn != "" {
+
+		// Safely handle contactable_time_column
+		if contactableTimeColumn, ok := contactEmailAddressColumnMap["contactable_time_column"].(string); ok && contactableTimeColumn != "" {
 			sdkContactEmailAddressColumn.ContactableTimeColumn = &contactableTimeColumn
 		}
 
@@ -107,7 +129,7 @@ func flattenSdkOutboundContactListContactEmailAddressColumnSlice(contactEmailAdd
 }
 
 func buildSdkOutboundContactListColumnDataTypeSpecifications(columnDataTypeSpecifications []interface{}) *[]platformclientv2.Columndatatypespecification {
-	if columnDataTypeSpecifications == nil || len(columnDataTypeSpecifications) < 1 {
+	if len(columnDataTypeSpecifications) < 1 {
 		return nil
 	}
 
@@ -168,6 +190,92 @@ func flattenSdkOutboundContactListColumnDataTypeSpecifications(columnDataTypeSpe
 	return columnDataTypeSpecificationsSlice
 }
 
+func ContactsExporterResolver(resourceId, exportDirectory, subDirectory string, configMap map[string]interface{}, meta interface{}, resource resourceExporter.ResourceInfo) error {
+	sdkConfig := meta.(*provider.ProviderMeta).ClientConfig
+	cp := GetOutboundContactlistProxy(sdkConfig)
+
+	contactListName := resource.BlockLabel
+	contactListId := resource.State.Attributes["id"]
+	exportFileName := fmt.Sprintf("%s.csv", contactListName)
+
+	fullDirectoryPath := filepath.Join(exportDirectory, subDirectory)
+	if err := os.MkdirAll(fullDirectoryPath, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", fullDirectoryPath, err)
+	}
+
+	ctx := context.Background()
+	var exportUrl string
+	diagErr := util.RetryWhen(util.IsStatus404, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		log.Printf("Initiating contact list export for contact list %s", contactListName)
+		resp, err := cp.initiateContactListContactsExport(ctx, contactListId)
+		if err != nil {
+			return resp, diag.FromErr(err)
+		}
+		return resp, nil
+	}, 400)
+	if diagErr != nil {
+		return fmt.Errorf(`error initiating contact list export: %v`, diagErr)
+	}
+	retryAttempt := 1
+	diagErr = util.RetryWhen(util.IsStatus404, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		log.Printf("Waiting for signed export URL for contact list %s", contactListName)
+		// Sleep at least 30 secs before attempting to retrieve export url to give the system time to be able to generate the URL
+		// This has an exponential backoff to permit large lists the time to process and serve up the export signed url
+		time.Sleep(time.Duration(30*retryAttempt) * time.Second)
+		var err error
+		var resp *platformclientv2.APIResponse
+		exportUrl, resp, err = cp.getContactListContactsExportUrl(ctx, contactListId)
+		if err != nil {
+			retryAttempt += 1
+			return resp, diag.FromErr(err)
+		}
+		return resp, nil
+
+	}, 400)
+	if diagErr != nil {
+		return fmt.Errorf(`error retrieving signed export url for contact list: %v`, diagErr)
+	}
+	diagErr = util.RetryWhen(util.IsStatus404, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		log.Printf("Downloading exported contacts for contact list %s", contactListName)
+		resp, err := files.DownloadExportFileWithAccessToken(fullDirectoryPath, exportFileName, exportUrl, sdkConfig.AccessToken)
+		if err != nil {
+			return resp, diag.FromErr(err)
+		}
+		return resp, nil
+	}, 400)
+	if diagErr != nil {
+		return fmt.Errorf(`error downloading exported contacts: %v`, diagErr)
+	}
+
+	fullCurrentPath := filepath.Join(fullDirectoryPath, exportFileName)
+	fullRelativePath := filepath.Join(subDirectory, exportFileName)
+	log.Printf("Saving exported contact list %s to file %s and updating state", contactListName, fullRelativePath)
+	configMap["contacts_filepath"] = fullRelativePath
+	configMap["contacts_id_name"] = "inin-outbound-id"
+
+	// Remove read only attributes from the config file
+	delete(configMap, "contacts_file_content_hash")
+	delete(configMap, "contacts_record_count")
+	hash, err := files.HashFileContent(fullCurrentPath)
+	if err != nil {
+		log.Printf("Error calculating file content hash: %v", err)
+		return err
+	}
+	resource.State.Attributes["contacts_file_content_hash"] = hash
+
+	recordCount, err := files.GetCSVRecordCount(fullCurrentPath)
+	if err != nil {
+		log.Printf("Error getting CSV record count: %v", err)
+		return err
+	}
+	resource.State.Attributes["contacts_record_count"] = strconv.Itoa(recordCount)
+
+	resource.State.Attributes["contacts_filepath"] = fullRelativePath
+	resource.State.Attributes["contacts_id_name"] = "inin-outbound-id"
+
+	return nil
+}
+
 func GeneratePhoneColumnsBlock(columnName, columnType, callableTimeColumn string) string {
 	return fmt.Sprintf(`
 	phone_columns {
@@ -176,6 +284,13 @@ func GeneratePhoneColumnsBlock(columnName, columnType, callableTimeColumn string
 		callable_time_column = %s
 	}
 `, columnName, columnType, callableTimeColumn)
+}
+
+func GenerateContactsFile(filepath, contactsIdName string) string {
+	return fmt.Sprintf(`
+	contacts_filepath = "%s"
+	contacts_id_name = "%s"
+	`, filepath, contactsIdName)
 }
 
 func GenerateOutboundContactList(

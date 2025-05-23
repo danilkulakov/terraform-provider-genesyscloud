@@ -3,18 +3,18 @@ package organization_authentication_settings
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"log"
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/constants"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 )
@@ -67,6 +67,15 @@ func readOrganizationAuthenticationSettings(ctx context.Context, d *schema.Resou
 			return retry.NonRetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("Failed to read organization authentication settings %s | error: %s", d.Id(), getErr), resp))
 		}
 
+		tokenTimeOut, resp, err := proxy.getTokensTimeOutSettings(ctx)
+		if err != nil {
+			if util.IsStatus404(resp) {
+				return retry.RetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("Failed to read time out settings %s | error: %s", d.Id(), err), resp))
+			}
+			return retry.NonRetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("Failed to read time out settings %s | error: %s", d.Id(), err), resp))
+		}
+
+		resourcedata.SetNillableValueWithInterfaceArrayWithFunc(d, "timeout_settings", tokenTimeOut, flattenTimeOutSettings)
 		resourcedata.SetNillableValue(d, "multifactor_authentication_required", orgAuthSettings.MultifactorAuthenticationRequired)
 		resourcedata.SetNillableValue(d, "domain_allowlist_enabled", orgAuthSettings.DomainAllowlistEnabled)
 		resourcedata.SetNillableValue(d, "domain_allowlist", orgAuthSettings.DomainAllowlist)
@@ -92,7 +101,19 @@ func updateOrganizationAuthenticationSettings(ctx context.Context, d *schema.Res
 	}
 
 	log.Printf("Updated organization authentication settings %s %s", d.Id(), orgAuthSettings)
+
+	if timeOutSettings := getTimeOutSettingsFromResourceData(d); timeOutSettings != nil {
+		log.Printf("Updating timeout settings %s", d.Id())
+
+		_, resp, err = proxy.updateTokensTimeOutSettings(ctx, timeOutSettings)
+		if err != nil {
+			return util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("failed to update time out settings: %s", err), resp)
+		}
+
+	}
+
 	return readOrganizationAuthenticationSettings(ctx, d, meta)
+
 }
 
 // deleteOrganizationAuthenticationSettings is used by the organization_authentication_settings resource to delete an organization authentication settings from Genesys cloud

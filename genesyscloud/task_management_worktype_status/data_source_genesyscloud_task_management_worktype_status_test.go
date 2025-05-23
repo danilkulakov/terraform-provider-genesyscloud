@@ -2,11 +2,11 @@ package task_management_worktype_status
 
 import (
 	"fmt"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	workbin "terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
-	workitemSchema "terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
-	workType "terraform-provider-genesyscloud/genesyscloud/task_management_worktype"
-	"terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	workbin "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
+	workitemSchema "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
+	workType "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_worktype"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
 	"github.com/google/uuid"
@@ -57,7 +57,6 @@ func TestAccDataSourceTaskManagementWorktypeStatus(t *testing.T) {
 						wtName,
 						wtDescription,
 						fmt.Sprintf("genesyscloud_task_management_workbin.%s.id", wbResourceLabel),
-						fmt.Sprintf("genesyscloud_task_management_workitem_schema.%s.id", wsResourceLabel),
 						"",
 					) +
 					GenerateWorktypeStatusResource(

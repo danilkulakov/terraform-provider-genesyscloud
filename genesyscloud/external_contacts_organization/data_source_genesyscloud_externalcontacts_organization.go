@@ -3,10 +3,10 @@ package external_contacts_organization
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	rc "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_cache"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"log"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	rc "terraform-provider-genesyscloud/genesyscloud/resource_cache"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -50,7 +50,7 @@ func hydrateOrganizationCacheFn(c *rc.DataSourceCache, ctx context.Context) erro
 
 	log.Printf("Hydrating cache for data source %s", ResourceType)
 
-	allExternalOrganization, resp, err := proxy.getAllExternalContactsOrganization(ctx, "")
+	allExternalOrganization, resp, err := proxy.getAllExternalContactsOrganization(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get external organization. Error: %s | API Response: %s", err.Error(), resp.String())
 	}

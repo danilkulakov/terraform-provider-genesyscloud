@@ -1,18 +1,19 @@
 package journey_action_map
 
 import (
+	architectFlow "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/architect_flow"
+	architectSchedulegroups "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/architect_schedulegroups"
+	architectSchedules "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/architect_schedules"
+	authDivision "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/auth_division"
+	journeyOutcome "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/journey_outcome"
+	journeySegment "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/journey_segment"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"log"
 	"sync"
-	gcloud "terraform-provider-genesyscloud/genesyscloud"
-	"terraform-provider-genesyscloud/genesyscloud/architect_flow"
-	"terraform-provider-genesyscloud/genesyscloud/architect_schedulegroups"
-	"terraform-provider-genesyscloud/genesyscloud/architect_schedules"
-	authDivision "terraform-provider-genesyscloud/genesyscloud/auth_division"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 var (
@@ -43,11 +44,11 @@ func (r *registerTestInstance) registerTestResources() {
 
 	providerResources[ResourceType] = ResourceJourneyActionMap()
 	providerResources[authDivision.ResourceType] = authDivision.ResourceAuthDivision()
-	providerResources[architect_schedules.ResourceType] = architect_schedules.ResourceArchitectSchedules()
-	providerResources[architect_schedulegroups.ResourceType] = architect_schedulegroups.ResourceArchitectSchedulegroups()
-	providerResources[architect_flow.ResourceType] = architect_flow.ResourceArchitectFlow()
-	providerResources["genesyscloud_journey_segment"] = gcloud.ResourceJourneySegment()
-	providerResources["genesyscloud_journey_outcome"] = gcloud.ResourceJourneyOutcome()
+	providerResources[architectSchedules.ResourceType] = architectSchedules.ResourceArchitectSchedules()
+	providerResources[architectSchedulegroups.ResourceType] = architectSchedulegroups.ResourceArchitectSchedulegroups()
+	providerResources[architectFlow.ResourceType] = architectFlow.ResourceArchitectFlow()
+	providerResources[journeyOutcome.ResourceType] = journeyOutcome.ResourceJourneyOutcome()
+	providerResources[journeySegment.ResourceType] = journeySegment.ResourceJourneySegment()
 }
 
 // registerTestDataSources registers all data sources used in the tests.

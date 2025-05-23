@@ -2,20 +2,20 @@ package telephony_providers_edges_phone
 
 import (
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	phoneBaseSettings "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_phonebasesettings"
+	edgeSite "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/user"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"strconv"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	phoneBaseSettings "terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_phonebasesettings"
-	edgeSite "terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
-	"terraform-provider-genesyscloud/genesyscloud/user"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
 func TestAccDataSourcePhone(t *testing.T) {
-	t.Parallel()
 	var (
 		phoneResourceLabel     = "phone1234"
 		phoneDataResourceLabel = "phoneData"
@@ -43,6 +43,9 @@ func TestAccDataSourcePhone(t *testing.T) {
 		ProviderFactories: provider.GetProviderFactories(providerResources, providerDataSources),
 		Steps: []resource.TestStep{
 			{
+				PreConfig: func() {
+					time.Sleep(30 * time.Second)
+				},
 				Config: user.GenerateUserResource(
 					userResourceLabel1,
 					userEmail1,

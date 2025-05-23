@@ -2,9 +2,9 @@ package routing_wrapupcode
 
 import (
 	"fmt"
-	authDivision "terraform-provider-genesyscloud/genesyscloud/auth_division"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
+	authDivision "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/auth_division"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
 	"github.com/google/uuid"
@@ -18,6 +18,7 @@ func TestAccDataSourceWrapupcode(t *testing.T) {
 		codeName          = "Terraform Code-" + uuid.NewString()
 		divResourceLabel  = "test-division"
 		divName           = "terraform-" + uuid.NewString()
+		description       = "Terraform wrapup code description"
 	)
 
 	resource.Test(t, resource.TestCase{
@@ -29,6 +30,7 @@ func TestAccDataSourceWrapupcode(t *testing.T) {
 					codeResourceLabel,
 					codeName,
 					"genesyscloud_auth_division."+divResourceLabel+".id",
+					description,
 				) + generateRoutingWrapupcodeDataSource(
 					codeDataLabel,
 					codeName,

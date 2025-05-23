@@ -3,9 +3,10 @@ package telephony_providers_edges_site
 import (
 	"context"
 	"fmt"
-	rc "terraform-provider-genesyscloud/genesyscloud/resource_cache"
 
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	rc "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_cache"
+
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 /*
@@ -147,7 +148,7 @@ func (p *SiteProxy) createSite(ctx context.Context, site *platformclientv2.Site)
 }
 
 // deleteSiteFunc deletes a Genesys Cloud Site by ID
-func (p *SiteProxy) deleteSite(ctx context.Context, siteId string) (*platformclientv2.APIResponse, error) {
+func (p *SiteProxy) DeleteSite(ctx context.Context, siteId string) (*platformclientv2.APIResponse, error) {
 	return p.deleteSiteAttr(ctx, p, siteId)
 }
 
@@ -292,7 +293,7 @@ func deleteSiteFn(ctx context.Context, p *SiteProxy, siteId string) (*platformcl
 	if err != nil {
 		return resp, err
 	}
-
+	rc.DeleteCacheItem(p.managedSiteCache, siteId)
 	return resp, nil
 }
 
@@ -409,7 +410,6 @@ func deleteSiteOutboundRouteFn(ctx context.Context, p *SiteProxy, siteId string,
 	if err != nil {
 		return resp, err
 	}
-
 	return resp, nil
 }
 

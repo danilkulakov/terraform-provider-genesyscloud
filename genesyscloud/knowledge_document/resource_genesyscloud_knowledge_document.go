@@ -3,52 +3,66 @@ package knowledge_document
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"log"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func getAllKnowledgeDocuments(ctx context.Context, clientConfig *platformclientv2.Configuration) (resourceExporter.ResourceIDMetaMap, diag.Diagnostics) {
 	knowledgeBaseList := make([]platformclientv2.Knowledgebase, 0)
 	resources := make(resourceExporter.ResourceIDMetaMap)
 	proxy := GetKnowledgeDocumentProxy(clientConfig)
-	//knowledgeAPI := platformclientv2.NewKnowledgeApiWithConfig(clientConfig)
 
 	// get published knowledge bases
-	publishedEntities, response, err := proxy.GetAllKnowledgebaseEntities(ctx, true) //getAllKnowledgebaseEntities(*knowledgeAPI, true)
+	publishedEntities, response, err := proxy.GetAllKnowledgebaseEntities(ctx, true)
 	if err != nil {
-		return nil, util.BuildAPIDiagnosticError("genesyscloud_knowledge_knowledgebase", fmt.Sprintf("%s", err), response)
-
+		return nil, util.BuildAPIDiagnosticError(ResourceType, err.Error(), response)
 	}
-	knowledgeBaseList = append(knowledgeBaseList, *publishedEntities...)
+	if publishedEntities != nil && len(*publishedEntities) > 0 {
+		knowledgeBaseList = append(knowledgeBaseList, *publishedEntities...)
+	}
 
 	// get unpublished knowledge bases
 	unpublishedEntities, response, err := proxy.GetAllKnowledgebaseEntities(ctx, false)
 	if err != nil {
-		return nil, util.BuildAPIDiagnosticError("genesyscloud_knowledge_knowledgebase", fmt.Sprintf("%s", err), response)
+		return nil, util.BuildAPIDiagnosticError(ResourceType, err.Error(), response)
 	}
-	knowledgeBaseList = append(knowledgeBaseList, *unpublishedEntities...)
+	if unpublishedEntities != nil && len(*unpublishedEntities) > 0 {
+		knowledgeBaseList = append(knowledgeBaseList, *unpublishedEntities...)
+	}
 
 	for _, knowledgeBase := range knowledgeBaseList {
 		partialEntities, response, err := proxy.GetAllKnowledgeDocumentEntities(ctx, &knowledgeBase)
 		if err != nil {
-			return nil, util.BuildAPIDiagnosticError("genesyscloud_knowledge_knowledgebase", fmt.Sprintf("%s", err), response)
+			return nil, util.BuildAPIDiagnosticError(ResourceType, err.Error(), response)
 		}
 		for _, knowledgeDocument := range *partialEntities {
-			id := fmt.Sprintf("%s,%s", *knowledgeDocument.Id, *knowledgeDocument.KnowledgeBase.Id)
-			resources[id] = &resourceExporter.ResourceMeta{BlockLabel: *knowledgeBase.Name + "_" + *knowledgeDocument.Title}
+			blockHash := ""
+			if knowledgeDocument.Category != nil && knowledgeDocument.Category.Id != nil {
+				category, _, err := proxy.getKnowledgeKnowledgebaseCategory(ctx, *knowledgeBase.Id, *knowledgeDocument.Category.Id)
+				if err != nil {
+					return nil, diag.Errorf("error reading knowledge document %s category %s: %s", *knowledgeDocument.Id, *knowledgeDocument.Category.Id, err)
+
+				}
+				blockHash, err = util.QuickHashFields(*category.Name)
+				if err != nil {
+					return nil, diag.Errorf("error hashing knowledge document %s: %s", *knowledgeDocument.Id, err)
+				}
+			}
+			id := BuildDocumentResourceDataID(*knowledgeDocument.Id, *knowledgeBase.Id)
+			resources[id] = &resourceExporter.ResourceMeta{BlockLabel: *knowledgeBase.Name + "_" + *knowledgeDocument.Title, BlockHash: blockHash}
 		}
 
 	}
@@ -59,7 +73,6 @@ func getAllKnowledgeDocuments(ctx context.Context, clientConfig *platformclientv
 func createKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	sdkConfig := meta.(*provider.ProviderMeta).ClientConfig
 	knowledgeBaseId := d.Get("knowledge_base_id").(string)
-	published := d.Get("published").(bool)
 	proxy := GetKnowledgeDocumentProxy(sdkConfig)
 
 	body, buildErr := buildKnowledgeDocumentCreateRequest(ctx, d, proxy, knowledgeBaseId)
@@ -73,18 +86,7 @@ func createKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta i
 		return util.BuildAPIDiagnosticError("genesyscloud_knowledge_document", fmt.Sprintf("Failed to create knowledge document %s error: %s", d.Id(), err), resp)
 	}
 
-	if published {
-		_, resp, versionErr := proxy.createKnowledgebaseDocumentVersions(ctx, knowledgeBaseId, *knowledgeDocument.Id, &platformclientv2.Knowledgedocumentversion{})
-		if versionErr != nil {
-			_, deleteError := proxy.deleteKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, *knowledgeDocument.Id)
-			if deleteError != nil {
-				log.Printf("failed to delete draft knowledge document %s error: %s", *knowledgeDocument.Id, deleteError)
-			}
-			return util.BuildAPIDiagnosticError("genesyscloud_knowledge_document", fmt.Sprintf("Failed to publish knowledge document error: %s", versionErr), resp)
-		}
-	}
-
-	id := fmt.Sprintf("%s,%s", *knowledgeDocument.Id, knowledgeBaseId)
+	id := BuildDocumentResourceDataID(*knowledgeDocument.Id, knowledgeBaseId)
 	d.SetId(id)
 
 	log.Printf("Created knowledge document %s", *knowledgeDocument.Id)
@@ -92,20 +94,19 @@ func createKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func readKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	id := strings.Split(d.Id(), ",")
-	knowledgeDocumentId := id[0]
-	knowledgeBaseId := id[1]
-	state := "Draft"
-	if d.Get("published").(bool) == true {
-		state = "Published"
-	}
-
+	knowledgeDocumentId, knowledgeBaseId := parseDocumentResourceDataID(d.Id())
 	sdkConfig := meta.(*provider.ProviderMeta).ClientConfig
 	proxy := GetKnowledgeDocumentProxy(sdkConfig)
 	cc := consistency_checker.NewConsistencyCheck(ctx, d, meta, ResourceKnowledgeDocument(), constants.ConsistencyChecks(), "genesyscloud_knowledge_document")
 
+	state := ""
+	if !d.Get("published").(bool) {
+		state = "Draft"
+	}
+
 	log.Printf("Reading knowledge document %s", knowledgeDocumentId)
 	return util.WithRetriesForRead(ctx, d, func() *retry.RetryError {
+
 		knowledgeDocument, resp, getErr := proxy.getKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, knowledgeDocumentId, nil, state)
 		if getErr != nil {
 			if util.IsStatus404(resp) {
@@ -115,21 +116,18 @@ func readKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta int
 		}
 
 		// required
-		id := fmt.Sprintf("%s,%s", *knowledgeDocument.Id, knowledgeBaseId)
+		id := BuildDocumentResourceDataID(*knowledgeDocument.Id, knowledgeBaseId)
 		d.SetId(id)
-		d.Set("knowledge_base_id", *knowledgeDocument.KnowledgeBase.Id)
+		if knowledgeDocument.KnowledgeBase != nil && knowledgeDocument.KnowledgeBase.Id != nil {
+			_ = d.Set("knowledge_base_id", *knowledgeDocument.KnowledgeBase.Id)
+		}
 
 		flattenedDocument, err := flattenKnowledgeDocument(ctx, knowledgeDocument, proxy, knowledgeBaseId)
 		if err != nil {
 			return retry.NonRetryableError(err)
 		}
-		d.Set("knowledge_document", flattenedDocument)
 
-		if *knowledgeDocument.State == "Published" {
-			d.Set("published", true)
-		} else {
-			d.Set("published", false)
-		}
+		_ = d.Set("knowledge_document", flattenedDocument)
 
 		log.Printf("Read Knowledge document %s", *knowledgeDocument.Id)
 		checkState := cc.CheckState(d)
@@ -138,30 +136,17 @@ func readKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta int
 }
 
 func updateKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	id := strings.Split(d.Id(), ",")
-	knowledgeDocumentId := id[0]
+	knowledgeDocumentId, _ := parseDocumentResourceDataID(d.Id())
 	knowledgeBaseId := d.Get("knowledge_base_id").(string)
-	state := "Draft"
-	if d.Get("published").(bool) == true {
-		state = "Published"
-	}
-
 	sdkConfig := meta.(*provider.ProviderMeta).ClientConfig
 	proxy := GetKnowledgeDocumentProxy(sdkConfig)
 
 	log.Printf("Updating Knowledge document %s", knowledgeDocumentId)
 	diagErr := util.RetryWhen(util.IsVersionMismatch, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
-		// Get current Knowledge document version
-		_, resp, getErr := proxy.getKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, knowledgeDocumentId, nil, state)
-		if getErr != nil {
-			return resp, util.BuildAPIDiagnosticError("genesyscloud_knowledge_document", fmt.Sprintf("Failed to read knowledge document %s error: %s", knowledgeDocumentId, getErr), resp)
-		}
-
 		update, err := buildKnowledgeDocumentRequest(ctx, d, proxy, knowledgeBaseId)
 		if err != nil {
 			return nil, err
 		}
-
 		log.Printf("Updating knowledge document %s", knowledgeDocumentId)
 		_, resp, putErr := proxy.updateKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, knowledgeDocumentId, update)
 		if putErr != nil {
@@ -172,7 +157,7 @@ func updateKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta i
 	if diagErr != nil {
 		return diagErr
 	}
-
+	_ = d.Set("published", false)
 	log.Printf("Updated Knowledge document %s", knowledgeDocumentId)
 	return readKnowledgeDocument(ctx, d, meta)
 }
@@ -192,12 +177,7 @@ func deleteKnowledgeDocument(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	return util.WithRetries(ctx, 30*time.Second, func() *retry.RetryError {
-		state := "Draft"
-		if d.Get("published").(bool) == true {
-			state = "Published"
-		}
-
-		_, resp, err := proxy.getKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, knowledgeDocumentId, nil, state)
+		_, resp, err := proxy.getKnowledgeKnowledgebaseDocument(ctx, knowledgeBaseId, knowledgeDocumentId, nil, "")
 		if err != nil {
 			if util.IsStatus404(resp) {
 				// Knowledge document deleted

@@ -1,9 +1,9 @@
 package telephony_providers_edges_site_outbound_route
 
 import (
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	registrar "terraform-provider-genesyscloud/genesyscloud/resource_register"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	registrar "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_register"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -29,8 +29,7 @@ func SetRegistrar(l registrar.Registrar) {
 // ResourceSiteOutboundRoute registers the genesyscloud_telephony_providers_edges_site_outbound_route resource with Terraform
 func ResourceSiteOutboundRoute() *schema.Resource {
 	return &schema.Resource{
-		Description: "Outbound Routes for a Genesys Cloud Site",
-
+		Description:   "Outbound Routes for a Genesys Cloud Site",
 		CreateContext: provider.CreateWithPooledClient(createSiteOutboundRoute),
 		ReadContext:   provider.ReadWithPooledClient(readSiteOutboundRoute),
 		UpdateContext: provider.UpdateWithPooledClient(updateSiteOutboundRoute),
@@ -102,7 +101,7 @@ func SiteExporterOutboundRoute() *resourceExporter.ResourceExporter {
 	}
 }
 
-// DataSourceSite registers the genesyscloud_telephony_providers_edges_site_outbound_route data source
+// DataSourceSiteOutboundRoute registers the genesyscloud_telephony_providers_edges_site_outbound_route data source
 func DataSourceSiteOutboundRoute() *schema.Resource {
 	return &schema.Resource{
 		Description: "Data source for Genesys Cloud Site Outbound Routes. Select a Site Outbound Route by name.",

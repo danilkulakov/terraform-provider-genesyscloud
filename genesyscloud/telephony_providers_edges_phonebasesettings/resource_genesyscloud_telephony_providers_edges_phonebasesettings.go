@@ -3,22 +3,22 @@ package telephony_providers_edges_phonebasesettings
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"log"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func createPhoneBaseSettings(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -187,10 +187,17 @@ func deletePhoneBaseSettings(ctx context.Context, d *schema.ResourceData, meta i
 	sdkConfig := meta.(*provider.ProviderMeta).ClientConfig
 	phoneBaseProxy := getPhoneBaseProxy(sdkConfig)
 
-	log.Printf("Deleting phone base settings")
-	resp, err := phoneBaseProxy.deletePhoneBaseSetting(ctx, d.Id())
-	if err != nil {
-		return util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to delete phone base settings %s error: %s", d.Id(), err), resp)
+	// DEVTOOLING-317: Unable to delete phone base settings when a station is still attached, retrying on HTTP 409
+	diagErr := util.RetryWhen(util.IsStatus409, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		log.Printf("Deleting phone base settings")
+		resp, err := phoneBaseProxy.deletePhoneBaseSetting(ctx, d.Id())
+		if err != nil {
+			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to delete phone base settings %s error: %s", d.Id(), err), resp)
+		}
+		return resp, nil
+	})
+	if diagErr != nil {
+		return diagErr
 	}
 
 	return util.WithRetries(ctx, 30*time.Second, func() *retry.RetryError {

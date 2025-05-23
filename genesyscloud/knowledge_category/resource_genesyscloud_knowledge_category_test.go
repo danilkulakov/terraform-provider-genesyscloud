@@ -2,16 +2,16 @@ package knowledge_category
 
 import (
 	"fmt"
+	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"strings"
-	gcloud "terraform-provider-genesyscloud/genesyscloud"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func TestAccResourceKnowledgeCategoryBasic(t *testing.T) {
@@ -32,7 +32,7 @@ func TestAccResourceKnowledgeCategoryBasic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Create
-				Config: gcloud.GenerateKnowledgeKnowledgebaseResource(
+				Config: knowledgeKnowledgebase.GenerateKnowledgeKnowledgebaseResource(
 					knowledgeBaseResourceLabel1,
 					knowledgeBaseName1,
 					knowledgeBaseDescription1,
@@ -52,7 +52,7 @@ func TestAccResourceKnowledgeCategoryBasic(t *testing.T) {
 			},
 			{
 				// Update
-				Config: gcloud.GenerateKnowledgeKnowledgebaseResource(
+				Config: knowledgeKnowledgebase.GenerateKnowledgeKnowledgebaseResource(
 					knowledgeBaseResourceLabel1,
 					knowledgeBaseName1,
 					knowledgeBaseDescription1,
@@ -105,7 +105,7 @@ func TestAccResourceKnowledgeCategoryParentChild(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Create
-				Config: gcloud.GenerateKnowledgeKnowledgebaseResource(
+				Config: knowledgeKnowledgebase.GenerateKnowledgeKnowledgebaseResource(
 					knowledgeBaseResourceLabel1,
 					knowledgeBaseName1,
 					knowledgeBaseDescription1,
@@ -130,7 +130,7 @@ func TestAccResourceKnowledgeCategoryParentChild(t *testing.T) {
 			},
 			{
 				// Update
-				Config: gcloud.GenerateKnowledgeKnowledgebaseResource(
+				Config: knowledgeKnowledgebase.GenerateKnowledgeKnowledgebaseResource(
 					knowledgeBaseResourceLabel1,
 					knowledgeBaseName1,
 					knowledgeBaseDescription1,

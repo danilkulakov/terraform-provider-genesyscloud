@@ -1,8 +1,8 @@
 package journey_outcome_predictor
 
 import (
+	journeyOutcome "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/journey_outcome"
 	"sync"
-	gcloud "terraform-provider-genesyscloud/genesyscloud"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -23,7 +23,7 @@ func (r *registerTestInstance) registerTestResources() {
 	defer r.resourceMapMutex.Unlock()
 
 	providerResources[ResourceType] = ResourceJourneyOutcomePredictor()
-	providerResources["genesyscloud_journey_outcome"] = gcloud.ResourceJourneyOutcome()
+	providerResources[journeyOutcome.ResourceType] = journeyOutcome.ResourceJourneyOutcome()
 }
 
 // initTestResources initializes all test resources and data sources.

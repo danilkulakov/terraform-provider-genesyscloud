@@ -2,13 +2,15 @@ package outbound_sequence
 
 import (
 	"fmt"
-	outboundCampaign "terraform-provider-genesyscloud/genesyscloud/outbound_campaign"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
+	outboundCampaign "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/outbound_campaign"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
+	"path/filepath"
 	"testing"
 
-	authDivision "terraform-provider-genesyscloud/genesyscloud/auth_division"
-	edgeSite "terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
+	authDivision "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/auth_division"
+	edgeSite "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/telephony_providers_edges_site"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -28,7 +30,7 @@ func TestAccDataSourceOutboundSequence(t *testing.T) {
 		contactListResourceLabel = "contact_list"
 		carResourceLabel         = "car"
 		siteId                   = "site"
-		outboundFlowFilePath     = "../../examples/resources/genesyscloud_flow/outboundcall_flow_example.yaml"
+		outboundFlowFilePath     = filepath.Join(testrunner.RootDir, "examples/resources/genesyscloud_flow/outboundcall_flow_example.yaml")
 		flowName                 = "test flow " + uuid.NewString()
 		emergencyNumber          = "+13128451429"
 		divResourceLabel         = "test-outbound-sequence-division"

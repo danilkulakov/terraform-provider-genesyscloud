@@ -3,23 +3,23 @@ package telephony_providers_edges_site
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"log"
 	"strconv"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
-	lists "terraform-provider-genesyscloud/genesyscloud/util/lists"
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
+	lists "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/leekchan/timeutil"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 var (
@@ -198,14 +198,40 @@ func updateSiteNumberPlans(ctx context.Context, sp *SiteProxy, d *schema.Resourc
 	// The default plans won't be assigned yet if there isn't a wait
 	time.Sleep(5 * time.Second)
 
+	diagErr := util.RetryWhen(util.IsStatus400, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
+		log.Printf("Updating number plans for site %s", d.Id())
+
+		updatedNumberPlans, diagErr := matchApiNumberPlans(ctx, sp, d, numberPlansFromTf)
+		if diagErr != nil {
+			return nil, diagErr
+		}
+
+		_, resp, err := sp.updateSiteNumberPlans(ctx, d.Id(), &updatedNumberPlans)
+		if err != nil {
+			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update number plans for site %s | error: %s", d.Id(), err), resp)
+		}
+		return resp, nil
+	})
+	if diagErr != nil {
+		return diagErr
+	}
+	// Wait for the update before reading
+	time.Sleep(5 * time.Second)
+
+	return nil
+}
+
+func matchApiNumberPlans(ctx context.Context, sp *SiteProxy, d *schema.ResourceData, numberPlansFromTf []platformclientv2.Numberplan) ([]platformclientv2.Numberplan, diag.Diagnostics) {
+	// Get the current number plans
 	numberPlansFromAPI, resp, err := sp.getSiteNumberPlans(ctx, d.Id())
 	if err != nil {
-		return util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to get number plans for site %s error: %s", d.Id(), err), resp)
+		return nil, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to get number plans for site %s error: %s", d.Id(), err), resp)
 	}
 
 	updatedNumberPlans := make([]platformclientv2.Numberplan, 0)
 	namesOfOverriddenDefaults := []string{}
 
+	// Match the number plans from the API with the number plans from the TF
 	for _, numberPlanFromTf := range numberPlansFromTf {
 		if plan, ok := nameInPlans(*numberPlanFromTf.Name, *numberPlansFromAPI); ok {
 			// Update the plan
@@ -224,29 +250,14 @@ func updateSiteNumberPlans(ctx context.Context, sp *SiteProxy, d *schema.Resourc
 		}
 	}
 
+	// Keep the default plans which are not overridden.
 	for _, numberPlanFromAPI := range *numberPlansFromAPI {
-		// Keep the default plans which are not overriden.
 		if isDefaultPlan(*numberPlanFromAPI.Name) && !lists.ItemInSlice(*numberPlanFromAPI.Name, namesOfOverriddenDefaults) {
 			updatedNumberPlans = append(updatedNumberPlans, numberPlanFromAPI)
 		}
 	}
+	return updatedNumberPlans, nil
 
-	diagErr := util.RetryWhen(util.IsStatus400, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
-		log.Printf("Updating number plans for site %s", d.Id())
-
-		_, resp, err := sp.updateSiteNumberPlans(ctx, d.Id(), &updatedNumberPlans)
-		if err != nil {
-			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update number plans for site %s | error: %s", d.Id(), err), resp)
-		}
-		return resp, nil
-	})
-	if diagErr != nil {
-		return diagErr
-	}
-	// Wait for the update before reading
-	time.Sleep(5 * time.Second)
-
-	return nil
 }
 
 func updateSiteOutboundRoutes(ctx context.Context, sp *SiteProxy, d *schema.ResourceData) diag.Diagnostics {

@@ -3,24 +3,23 @@ package telephony_providers_edges_site
 import (
 	"context"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"log"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/constants"
-	featureToggles "terraform-provider-genesyscloud/genesyscloud/util/feature_toggles"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
-	"terraform-provider-genesyscloud/genesyscloud/consistency_checker"
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	lists "terraform-provider-genesyscloud/genesyscloud/util/lists"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	lists "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func getAllSites(ctx context.Context, sdkConfig *platformclientv2.Configuration) (resourceExporter.ResourceIDMetaMap, diag.Diagnostics) {
@@ -110,21 +109,6 @@ func createSite(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 		return diagErr
 	}
 
-	if !featureToggles.OutboundRoutesToggleExists() {
-		diagErr = util.WithRetries(ctx, 60*time.Second, func() *retry.RetryError {
-			diagErr = updateSiteOutboundRoutes(ctx, sp, d)
-			if diagErr != nil {
-				return retry.RetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("failed to create site %s | error: %v", d.Id(), diagErr), nil))
-			}
-			return nil
-		})
-		if diagErr != nil {
-			return diagErr
-		}
-	} else {
-		log.Printf("%s is set, not managing outbound_routes attribute in site %s resource", featureToggles.OutboundRoutesToggleName(), d.Id())
-	}
-
 	log.Printf("Created site %s", *site.Id)
 
 	// Default site
@@ -155,23 +139,24 @@ func readSite(ctx context.Context, d *schema.ResourceData, meta interface{}) dia
 			return retry.NonRetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("failed to read site %s | error: %s", d.Id(), err), resp))
 		}
 
-		_ = d.Set("name", *currentSite.Name)
+		resourcedata.SetNillableValue(d, "name", currentSite.Name)
 		_ = d.Set("location_id", nil)
 		if currentSite.Location != nil {
 			_ = d.Set("location_id", *currentSite.Location.Id)
 		}
-		_ = d.Set("media_model", *currentSite.MediaModel)
-		_ = d.Set("media_regions_use_latency_based", *currentSite.MediaRegionsUseLatencyBased)
+
+		resourcedata.SetNillableValue(d, "media_model", currentSite.MediaModel)
+		resourcedata.SetNillableValue(d, "media_regions_use_latency_based", currentSite.MediaRegionsUseLatencyBased)
 
 		resourcedata.SetNillableValue(d, "description", currentSite.Description)
 		resourcedata.SetNillableValueWithInterfaceArrayWithFunc(d, "edge_auto_update_config", currentSite.EdgeAutoUpdateConfig, flattenSdkEdgeAutoUpdateConfig)
 		resourcedata.SetNillableValue(d, "media_regions", currentSite.MediaRegions)
 
-		d.Set("caller_id", nil)
+		_ = d.Set("caller_id", nil)
 		if currentSite.CallerId != nil && *currentSite.CallerId != "" {
 			_ = d.Set("caller_id", utilE164.FormatAsCalculatedE164Number(*currentSite.CallerId))
 		}
-		_ = d.Set("caller_name", currentSite.CallerName)
+		resourcedata.SetNillableValue(d, "caller_name", currentSite.CallerName)
 
 		if currentSite.PrimarySites != nil {
 			_ = d.Set("primary_sites", util.SdkDomainEntityRefArrToList(*currentSite.PrimarySites))
@@ -187,21 +172,13 @@ func readSite(ctx context.Context, d *schema.ResourceData, meta interface{}) dia
 			return retryErr
 		}
 
-		if !featureToggles.OutboundRoutesToggleExists() {
-			if retryErr := readSiteOutboundRoutes(ctx, sp, d); retryErr != nil {
-				return retryErr
-			}
-		} else {
-			log.Printf("%s is set, not managing outbound_routes attribute in site %s resource", featureToggles.OutboundRoutesToggleName(), d.Id())
-		}
-
 		defaultSiteId, resp, err := sp.getDefaultSiteId(ctx)
 		if err != nil {
 			return retry.NonRetryableError(util.BuildWithRetriesApiDiagnosticError(ResourceType, fmt.Sprintf("failed to get default site id: %v", err), resp))
 		}
 		_ = d.Set("set_as_default_site", defaultSiteId == *currentSite.Id)
 
-		log.Printf("Read site %s %s", d.Id(), *currentSite.Name)
+		log.Printf("Read site %s", d.Id())
 		return cc.CheckState(d)
 	})
 }
@@ -271,7 +248,7 @@ func updateSite(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 		log.Printf("Updating site %s", *site.Name)
 		site, resp, err = sp.updateSite(ctx, d.Id(), site)
 		if err != nil {
-			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update site %s error: %s", *site.Name, err), resp)
+			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to update site %s error: %s", *currentSite.Name, err), resp)
 		}
 
 		return resp, nil
@@ -283,15 +260,6 @@ func updateSite(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 	diagErr = updateSiteNumberPlans(ctx, sp, d)
 	if diagErr != nil {
 		return diagErr
-	}
-
-	if !featureToggles.OutboundRoutesToggleExists() {
-		diagErr = updateSiteOutboundRoutes(ctx, sp, d)
-		if diagErr != nil {
-			return diagErr
-		}
-	} else {
-		log.Printf("%s is set, not managing outbound_routes attribute in site %s resource", featureToggles.OutboundRoutesToggleName(), d.Id())
 	}
 
 	if d.Get("set_as_default_site").(bool) {
@@ -315,7 +283,7 @@ func deleteSite(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 	log.Printf("Deleting site %s", d.Id())
 	diagErr := util.RetryWhen(util.IsStatus409, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
 		log.Printf("Deleting site %s", d.Id())
-		resp, err := sp.deleteSite(ctx, d.Id())
+		resp, err := sp.DeleteSite(ctx, d.Id())
 		if err != nil {
 			if util.IsStatus404(resp) {
 				log.Printf("Site already deleted %s", d.Id())
@@ -324,7 +292,7 @@ func deleteSite(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 			return resp, util.BuildAPIDiagnosticError(ResourceType, fmt.Sprintf("Failed to delete site %s error: %s", d.Id(), err), resp)
 		}
 		return resp, nil
-	})
+	}, 400)
 
 	if diagErr != nil {
 		return diagErr

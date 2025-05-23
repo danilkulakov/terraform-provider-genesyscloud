@@ -3,13 +3,13 @@ package tfexporter
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
 	"log"
 	"path/filepath"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/util"
-	"terraform-provider-genesyscloud/genesyscloud/util/files"
 
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -23,18 +23,18 @@ type JsonExporter struct {
 	resourceTypesJSONMaps map[string]resourceJSONMaps
 	dataSourceTypesMaps   map[string]resourceJSONMaps
 	unresolvedAttrs       []unresolvableAttributeInfo
-	providerSource        string
+	providerRegistry      string
 	version               string
 	dirPath               string
 	splitFilesByResource  bool
 }
 
-func NewJsonExporter(resourceTypesJSONMaps map[string]resourceJSONMaps, dataSourceTypesMaps map[string]resourceJSONMaps, unresolvedAttrs []unresolvableAttributeInfo, providerSource string, version string, dirPath string, splitFilesByResource bool) *JsonExporter {
+func NewJsonExporter(resourceTypesJSONMaps map[string]resourceJSONMaps, dataSourceTypesMaps map[string]resourceJSONMaps, unresolvedAttrs []unresolvableAttributeInfo, providerRegistry string, version string, dirPath string, splitFilesByResource bool) *JsonExporter {
 	jsonExporter := &JsonExporter{
 		resourceTypesJSONMaps: resourceTypesJSONMaps,
 		dataSourceTypesMaps:   dataSourceTypesMaps,
 		unresolvedAttrs:       unresolvedAttrs,
-		providerSource:        providerSource,
+		providerRegistry:      providerRegistry,
 		version:               version,
 		dirPath:               dirPath,
 		splitFilesByResource:  splitFilesByResource,
@@ -46,7 +46,7 @@ func NewJsonExporter(resourceTypesJSONMaps map[string]resourceJSONMaps, dataSour
 This file contains all of the functions used to generate the JSON export.
 */
 func (j *JsonExporter) exportJSONConfig() diag.Diagnostics {
-	providerJsonMap := createProviderJsonMap(j.providerSource, j.version)
+	providerJsonMap := createProviderJsonMap(j.providerRegistry, j.version)
 	variablesJsonMap := createVariablesJsonMap(j.unresolvedAttrs)
 
 	if j.splitFilesByResource {
@@ -149,11 +149,11 @@ func (j *JsonExporter) exportJSONConfig() diag.Diagnostics {
 	return nil
 }
 
-func createProviderJsonMap(providerSource string, version string) util.JsonMap {
+func createProviderJsonMap(providerRegistry string, version string) util.JsonMap {
 	return util.JsonMap{
 		"required_providers": util.JsonMap{
 			"genesyscloud": util.JsonMap{
-				"source":  providerSource,
+				"source":  fmt.Sprintf("%s/mypurecloud/genesyscloud", providerRegistry),
 				"version": version,
 			},
 		},

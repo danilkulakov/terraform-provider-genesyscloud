@@ -1,10 +1,10 @@
 package scripts
 
 import (
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	registrar "terraform-provider-genesyscloud/genesyscloud/resource_register"
-	"terraform-provider-genesyscloud/genesyscloud/validators"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	registrar "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_register"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/validators"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -72,6 +72,12 @@ func ResourceScript() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 			},
+			"division_id": {
+				Description: "Specify division id",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -84,6 +90,9 @@ func ExporterScript() *resourceExporter.ResourceExporter {
 		CustomFileWriter: resourceExporter.CustomFileWriterSettings{
 			RetrieveAndWriteFilesFunc: ScriptResolver,
 			SubDirectory:              "scripts",
+		},
+		DataSourceResolver: map[*resourceExporter.DataAttr]*resourceExporter.ResourceAttr{
+			{Attr: "name"}: {Attr: "script_name"},
 		},
 	}
 }

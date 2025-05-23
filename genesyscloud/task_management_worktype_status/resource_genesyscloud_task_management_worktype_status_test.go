@@ -2,16 +2,16 @@ package task_management_worktype_status
 
 import (
 	"fmt"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	workbin "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
+	workitemSchema "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
+	workType "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_worktype"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	workbin "terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
-	workitemSchema "terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
-	workType "terraform-provider-genesyscloud/genesyscloud/task_management_worktype"
-	"terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 
@@ -67,7 +67,6 @@ func TestAccResourceTaskManagementWorktypeStatus(t *testing.T) {
 						wtName,
 						wtDescription,
 						fmt.Sprintf("genesyscloud_task_management_workbin.%s.id", wbResourceLabel),
-						fmt.Sprintf("genesyscloud_task_management_workitem_schema.%s.id", wsResourceLabel),
 						"",
 					) +
 					GenerateWorktypeStatusResource(
@@ -97,7 +96,6 @@ func TestAccResourceTaskManagementWorktypeStatus(t *testing.T) {
 						wtName,
 						wtDescription,
 						fmt.Sprintf("genesyscloud_task_management_workbin.%s.id", wbResourceLabel),
-						fmt.Sprintf("genesyscloud_task_management_workitem_schema.%s.id", wsResourceLabel),
 						"",
 					) +
 					GenerateWorktypeStatusResource(

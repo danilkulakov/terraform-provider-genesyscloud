@@ -2,12 +2,12 @@ package webdeployments_configuration_utils
 
 import (
 	"context"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 	"strings"
-	"terraform-provider-genesyscloud/genesyscloud/util/lists"
-	"terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v150/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
 )
 
 func buildCobrowseSettings(d *schema.ResourceData) *platformclientv2.Cobrowsesettings {
@@ -130,8 +130,9 @@ func buildAuthenticationSettings(d *schema.ResourceData) *platformclientv2.Authe
 
 	cfg := settings[0].(map[string]interface{})
 	return &platformclientv2.Authenticationsettings{
-		Enabled:       platformclientv2.Bool(cfg["enabled"].(bool)),
-		IntegrationId: platformclientv2.String(cfg["integration_id"].(string)),
+		Enabled:             platformclientv2.Bool(cfg["enabled"].(bool)),
+		IntegrationId:       platformclientv2.String(cfg["integration_id"].(string)),
+		AllowSessionUpgrade: platformclientv2.Bool(cfg["allow_session_upgrade"].(bool)),
 	}
 }
 
@@ -251,8 +252,9 @@ func FlattenAuthenticationSettings(authenticationSettings *platformclientv2.Auth
 	}
 
 	return []interface{}{map[string]interface{}{
-		"enabled":        authenticationSettings.Enabled,
-		"integration_id": authenticationSettings.IntegrationId,
+		"enabled":               authenticationSettings.Enabled,
+		"integration_id":        authenticationSettings.IntegrationId,
+		"allow_session_upgrade": authenticationSettings.AllowSessionUpgrade,
 	}}
 }
 

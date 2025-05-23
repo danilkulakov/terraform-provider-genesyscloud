@@ -2,15 +2,15 @@ package task_management_worktype
 
 import (
 	"fmt"
-	"terraform-provider-genesyscloud/genesyscloud/provider"
-	"terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 
-	workbin "terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
-	workitemSchema "terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
+	workbin "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workbin"
+	workitemSchema "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/task_management_workitem_schema"
 )
 
 /*
@@ -36,7 +36,6 @@ func TestAccDataSourceTaskManagementWorktype(t *testing.T) {
 			name:             "tf_worktype_" + uuid.NewString(),
 			description:      "worktype created for CX as Code test case",
 			defaultWorkbinId: fmt.Sprintf("genesyscloud_task_management_workbin.%s.id", wbResourceLabel),
-			schemaId:         fmt.Sprintf("genesyscloud_task_management_workitem_schema.%s.id", wsResourceLabel),
 		}
 
 		dataSourceLabel = "data_worktype_1"
@@ -49,7 +48,7 @@ func TestAccDataSourceTaskManagementWorktype(t *testing.T) {
 			{
 				Config: workbin.GenerateWorkbinResource(wbResourceLabel, wbName, wbDescription, util.NullValue) +
 					workitemSchema.GenerateWorkitemSchemaResourceBasic(wsResourceLabel, wsName, wsDescription) +
-					GenerateWorktypeResourceBasic(wtRes.resourceLabel, wtRes.name, wtRes.description, wtRes.defaultWorkbinId, wtRes.schemaId, "") +
+					GenerateWorktypeResourceBasic(wtRes.resourceLabel, wtRes.name, wtRes.description, wtRes.defaultWorkbinId, "") +
 					generateWorktypeDataSource(dataSourceLabel, wtRes.name, ResourceType+"."+wtRes.resourceLabel),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data."+ResourceType+"."+dataSourceLabel, "id", ResourceType+"."+wtRes.resourceLabel, "id"),
