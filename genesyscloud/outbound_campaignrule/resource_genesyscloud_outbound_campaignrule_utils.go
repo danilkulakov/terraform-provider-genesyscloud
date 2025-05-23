@@ -357,7 +357,7 @@ func flattenRuleParameters(params *platformclientv2.Campaignruleparameters) []in
 	resourcedata.SetMapValueIfNotNil(paramsMap, "queue_id", params.Queue)
 	resourcedata.SetMapValueIfNotNil(paramsMap, "messages_per_minute", params.MessagesPerMinute)
 	resourcedata.SetMapValueIfNotNil(paramsMap, "sms_messages_per_minute", params.SmsMessagesPerMinute)
-	resourcedata.SetMapValueIfNotNil(paramsMap, "email_messages_per_minute", params.EmailMessagessPerMinute)
+	resourcedata.SetMapValueIfNotNil(paramsMap, "email_messages_per_minute", params.EmailMessagesPerMinute)
 	resourcedata.SetMapValueIfNotNil(paramsMap, "sms_content_template", params.SmsContentTemplate)
 	resourcedata.SetMapValueIfNotNil(paramsMap, "email_content_template", params.EmailContentTemplate)
 
