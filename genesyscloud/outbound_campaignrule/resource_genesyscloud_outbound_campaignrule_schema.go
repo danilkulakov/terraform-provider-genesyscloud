@@ -72,6 +72,7 @@ var (
 			`time_zone_id`: {
 				Description: `The time zone for the execution control frequency="oncePerDay"; for example, Africa/Abidjan. This property is ignored when frequency is not "oncePerDay".`,
 				Type:        schema.TypeString,
+				Optional:    true,
 			},
 		},
 	}
@@ -245,13 +246,13 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			`match_any_conditions`: {
 				Description: `Whether actions are executed if any condition is met, or only when all conditions are met.`,
-				Required:    true,
+				Optional:    true,
 				Default:     false,
 				Type:        schema.TypeBool,
 			},
 			`conditions`: {
 				Description: `The list of conditions that are evaluated on the entities.`,
-				Required:    true,
+				Optional:    true,
 				MinItems:    1,
 				Type:        schema.TypeList,
 				Elem:        outboundCampaignRuleCondition,
@@ -344,14 +345,14 @@ func ResourceOutboundCampaignrule() *schema.Resource {
 			},
 			`condition_groups`: {
 				Description: `List of condition groups that are evaluated, used only with campaignRuleProcessing="v2"`,
-				Required:    true,
+				Optional:    true,
 				MinItems:    1,
 				Type:        schema.TypeList,
 				Elem:        outboundCampaignRuleConditionGroup,
 			},
 			`execution_settings`: {
 				Description: `Campaign rule execution settings.`,
-				Required:    true,
+				Optional:    true,
 				MaxItems:    1,
 				Type:        schema.TypeList,
 				Elem:        outboundCampaignRuleExecutionSettings,
