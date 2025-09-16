@@ -3,8 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
-	prl "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/panic_recovery_logger"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,13 +14,15 @@ import (
 	"syscall"
 	"time"
 
+	prl "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/panic_recovery_logger"
+
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/platform"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func init() {
@@ -36,6 +38,9 @@ func init() {
 		if s.Default != nil {
 			desc += fmt.Sprintf(" Defaults to `%v`.", s.Default)
 		}
+		if s.Deprecated != "" {
+			desc = fmt.Sprintf("*DEPRECATED: %s* %s", s.Deprecated, desc)
+		}
 		return strings.TrimSpace(desc)
 	}
 
@@ -50,15 +55,8 @@ func New(version string, providerResources map[string]*schema.Resource, provider
 		   and data source maps.  If you do not do a deep copy and try to pass in the original maps, you open yourself up to race conditions
 		   because they map are being read and written to concurrently.
 		*/
-		copiedResources := make(map[string]*schema.Resource)
-		for k, v := range providerResources {
-			copiedResources[k] = v
-		}
-
-		copiedDataSources := make(map[string]*schema.Resource)
-		for k, v := range providerDataSources {
-			copiedDataSources[k] = v
-		}
+		copiedResources := maps.Clone(providerResources)
+		copiedDataSources := maps.Clone(providerDataSources)
 
 		setupCleanup()
 
@@ -72,14 +70,15 @@ func New(version string, providerResources map[string]*schema.Resource, provider
 }
 
 type ProviderMeta struct {
-	Version            string
-	Registry           string
-	Platform           *platform.Platform
-	ClientConfig       *platformclientv2.Configuration
-	Domain             string
-	Organization       *platformclientv2.Organization
-	DefaultCountryCode string
-	MaxClients         int
+	Version               string
+	Registry              string
+	Platform              *platform.Platform
+	ClientConfig          *platformclientv2.Configuration
+	Domain                string
+	AuthorizationProducts []string
+	Organization          *platformclientv2.Organization
+	DefaultCountryCode    string
+	MaxClients            int
 }
 
 type IntegrationMeta struct {
@@ -94,7 +93,9 @@ var (
 
 func setupCleanup() {
 	cleanupOnce.Do(func() {
-		sigChan := make(chan os.Signal, 1)
+		if sigChan == nil {
+			sigChan = make(chan os.Signal, 1)
+		}
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 		go func() {
@@ -140,6 +141,11 @@ func configure(version string) schema.ConfigureContextFunc {
 			return nil, err
 		}
 
+		authorizedProducts, err := getAuthorizationProducts(defaultConfig)
+		if err != nil {
+			return nil, err
+		}
+
 		maxClients := MaxClients
 		if v, ok := data.GetOk(AttrTokenPoolSize); ok {
 			maxClients = v.(int)
@@ -147,17 +153,19 @@ func configure(version string) schema.ConfigureContextFunc {
 		prl.InitPanicRecoveryLoggerInstance(data.Get("log_stack_traces").(bool), data.Get("log_stack_traces_file_path").(string))
 
 		meta := &ProviderMeta{
-			Version:            version,
-			Platform:           &platform,
-			Registry:           providerSourceRegistry,
-			ClientConfig:       defaultConfig,
-			Domain:             getRegionDomain(data.Get("aws_region").(string)),
-			Organization:       currentOrg,
-			DefaultCountryCode: *currentOrg.DefaultCountryCode,
-			MaxClients:         maxClients,
+			Version:               version,
+			Platform:              &platform,
+			Registry:              providerSourceRegistry,
+			ClientConfig:          defaultConfig,
+			AuthorizationProducts: authorizedProducts,
+			Domain:                getRegionDomain(data.Get("aws_region").(string)),
+			Organization:          currentOrg,
+			DefaultCountryCode:    *currentOrg.DefaultCountryCode,
+			MaxClients:            maxClients,
 		}
 
 		setProviderMeta(meta)
+		setProviderConfig(data) // Store the provider configuration for later use
 
 		return meta, nil
 
@@ -203,6 +211,19 @@ func getRegistry(platform *platform.Platform, version string) string {
 	return registry
 }
 
+func getAuthorizationProducts(defaultConfig *platformclientv2.Configuration) ([]string, diag.Diagnostics) {
+	authAPI := platformclientv2.NewAuthorizationApiWithConfig(defaultConfig)
+	productEntities, _, err := authAPI.GetAuthorizationProducts()
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
+	products := make([]string, *productEntities.Total)
+	for _, product := range *productEntities.Entities {
+		products = append(products, *product.Id)
+	}
+	return products, nil
+}
+
 func getOrganizationMe(defaultConfig *platformclientv2.Configuration) (*platformclientv2.Organization, diag.Diagnostics) {
 	orgApiClient := platformclientv2.NewOrganizationApiWithConfig(defaultConfig)
 	me, _, err := orgApiClient.GetOrganizationsMe()
@@ -231,6 +252,8 @@ func getRegionMap() map[string]string {
 		"ap-northeast-3": "apne3.pure.cloud",
 		"eu-central-2":   "euc2.pure.cloud",
 		"me-central-1":   "mec1.pure.cloud",
+		"mx-central-1":   "mxc1.pure.cloud",
+		"ap-southeast-1": "apse1.pure.cloud",
 	}
 }
 

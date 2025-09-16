@@ -3,13 +3,14 @@ package architect_ivr
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/consistency_checker"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
-	"log"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
@@ -18,7 +19,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 // getAllIvrConfigs retrieves all architect IVRs and is used for the exporter
@@ -32,13 +33,7 @@ func getAllIvrConfigs(ctx context.Context, clientConfig *platformclientv2.Config
 	}
 
 	for _, entity := range *allIvrs {
-		var blockLabel string
-		if entity.OpenHoursFlow != nil && entity.OpenHoursFlow.Name != nil {
-			blockLabel = *entity.OpenHoursFlow.Name + "_" + *entity.Name
-		} else {
-			blockLabel = *entity.Name
-		}
-		resources[*entity.Id] = &resourceExporter.ResourceMeta{BlockLabel: blockLabel}
+		resources[*entity.Id] = &resourceExporter.ResourceMeta{BlockLabel: *entity.Name}
 	}
 	return resources, nil
 }

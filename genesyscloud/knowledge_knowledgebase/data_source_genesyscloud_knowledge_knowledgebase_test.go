@@ -2,9 +2,10 @@ package knowledge_knowledgebase
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	"testing"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -13,7 +14,7 @@ import (
 func TestAccDataSourceKnowledgeKnowledgebaseBasic(t *testing.T) {
 	var (
 		knowledgeBaseResourceLabel1 = "test-knowledgebase1"
-		knowledgeBaseName1          = "Terraform Test Knowledge Base 1-" + uuid.NewString()
+		knowledgeBaseName1          = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		knowledgeBaseDescription1   = "test-knowledgebase-description1"
 		knowledgeBaseCoreLanguage1  = "en-US"
 

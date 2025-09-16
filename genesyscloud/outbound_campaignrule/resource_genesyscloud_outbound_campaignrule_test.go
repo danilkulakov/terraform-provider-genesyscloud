@@ -2,19 +2,20 @@ package outbound_campaignrule
 
 import (
 	"fmt"
-	outboundSequence "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/outbound_sequence"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
 	"math/rand"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	outboundSequence "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/outbound_sequence"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func TestAccResourceOutboundCampaignRuleBasic(t *testing.T) {
@@ -663,7 +664,6 @@ resource "genesyscloud_routing_wrapupcode" "%s" {
 
 resource "genesyscloud_flow" "%s" {
         filepath          = "%s"
-        file_content_hash =  filesha256("%s")
         force_unlock      = false
         substitutions = {
 			flow_name          = "%s"
@@ -701,7 +701,6 @@ resource "genesyscloud_outbound_callanalysisresponseset" "%s" {
 		wrapupCodeResourceLabel,
 		wrapupCodeName,
 		flowResourceLabel,
-		flowFilePath,
 		flowFilePath,
 		flowName,
 		flowDivisionName,

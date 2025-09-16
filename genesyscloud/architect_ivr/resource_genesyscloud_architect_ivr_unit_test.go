@@ -4,6 +4,7 @@ package architect_ivr
 import (
 	"context"
 	"fmt"
+
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 
 	"net/http"
@@ -11,12 +12,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 	"github.com/stretchr/testify/assert"
 )
 
 /** Unit Test **/
-func TestUnitResourceArchitectRead(t *testing.T) {
+func TestUnitResourceArchitectIvrRead(t *testing.T) {
 	tId := uuid.NewString()
 	tName := "My Unit Test IVR"
 	tDescription := "My Unit Test IVR"
@@ -78,7 +79,7 @@ func TestUnitResourceArchitectRead(t *testing.T) {
 
 }
 
-func TestUnitResourceArchitectDeleteStandard(t *testing.T) {
+func TestUnitResourceArchitectIvrDeleteStandard(t *testing.T) {
 	tId := uuid.NewString()
 	tName := "My Unit Test IVR"
 	tDescription := "My Unit Test IVR"
@@ -131,7 +132,7 @@ func TestUnitResourceArchitectDeleteStandard(t *testing.T) {
 	assert.Equal(t, tId, d.Id())
 }
 
-func TestUnitResourceArchitectDeleteSoftDelete(t *testing.T) {
+func TestUnitResourceArchitectIvrDeleteSoftDelete(t *testing.T) {
 	tId := uuid.NewString()
 	tName := "My Unit Test IVR"
 	tDescription := "My Unit Test IVR"
@@ -195,7 +196,7 @@ func TestUnitResourceArchitectDeleteSoftDelete(t *testing.T) {
 
 }
 
-func TestUnitResourceArchitectCreate(t *testing.T) {
+func TestUnitResourceArchitectIvrCreate(t *testing.T) {
 	tId := uuid.NewString()
 	tName := "My Unit Test IVR"
 	tDescription := "My Unit Test IVR"
@@ -266,7 +267,7 @@ func TestUnitResourceArchitectCreate(t *testing.T) {
 	assert.Equal(t, tId, d.Id())
 }
 
-func TestUnitResourceArchitectUpdate(t *testing.T) {
+func TestUnitResourceArchitectIvrUpdate(t *testing.T) {
 	tId := uuid.NewString()
 	tName := "My Unit Test IVR"
 	tDescription := "My updated Unit Test IVR"

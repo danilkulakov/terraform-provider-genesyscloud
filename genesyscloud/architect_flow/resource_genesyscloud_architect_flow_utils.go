@@ -3,14 +3,15 @@ package architect_flow
 import (
 	"context"
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -25,20 +26,33 @@ func isForceUnlockEnabled(d *schema.ResourceData) bool {
 	return false
 }
 
+func GenerateFlowResourceTriggerHash(resourceLabel, srcFile, fileContent string, forceUnlock bool, substitutions ...string) string {
+	if fileContent != "" {
+		updateFile(srcFile, fileContent)
+	}
+
+	flowResourceStr := fmt.Sprintf(`resource "%s" "%s" {
+        filepath = %s
+		update_trigger_hash =  filesha256(%s)
+		force_unlock = %v
+		%s
+	}
+	`, ResourceType, resourceLabel, strconv.Quote(srcFile), strconv.Quote(srcFile), forceUnlock, strings.Join(substitutions, "\n"))
+
+	return flowResourceStr
+}
+
 func GenerateFlowResource(resourceLabel, srcFile, fileContent string, forceUnlock bool, substitutions ...string) string {
 	if fileContent != "" {
 		updateFile(srcFile, fileContent)
 	}
 
-	flowResourceStr := fmt.Sprintf(`resource "genesyscloud_flow" "%s" {
+	return fmt.Sprintf(`resource "%s" "%s" {
         filepath = %s
-		file_content_hash =  filesha256(%s)
 		force_unlock = %v
 		%s
 	}
-	`, resourceLabel, strconv.Quote(srcFile), strconv.Quote(srcFile), forceUnlock, strings.Join(substitutions, "\n"))
-
-	return flowResourceStr
+	`, ResourceType, resourceLabel, strconv.Quote(srcFile), forceUnlock, strings.Join(substitutions, "\n"))
 }
 
 // architectFlowResolver downloads and processes an architect flow from Genesys Cloud.
@@ -137,11 +151,10 @@ func updateResourceConfigAndState(configMap map[string]any, resource resourceExp
 	)
 
 	configMap["filepath"] = exportFilePath
-	configMap["file_content_hash"] = fmt.Sprintf(`${filesha256("%s")}`, exportFilePath)
 
 	resource.State.Attributes["filepath"] = exportFilePath
 	// Update file_content_hash in exported state file with actual hash
-	hash, err := files.HashFileContent(exportFilePathIncludingExportDirName)
+	hash, err := files.HashFileContent(context.Background(), exportFilePathIncludingExportDirName, true)
 	if err != nil {
 		log.Printf("Error Calculating Hash '%s' ", err)
 	} else {

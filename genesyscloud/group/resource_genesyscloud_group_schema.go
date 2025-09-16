@@ -54,6 +54,7 @@ func GroupExporter() *resourceExporter.ResourceExporter {
 		CustomValidateExports: map[string][]string{
 			"E164": {"addresses.number"},
 		},
+		AllowEmptyArrays: []string{"addresses", "owner_ids"},
 	}
 }
 
@@ -129,6 +130,12 @@ func ResourceGroup() *schema.Resource {
 			},
 			"calls_enabled": {
 				Description: "Allow calls to be placed to this group",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+			},
+			"include_owners": {
+				Description: "Allow owners to be included as members of the group.",
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     true,

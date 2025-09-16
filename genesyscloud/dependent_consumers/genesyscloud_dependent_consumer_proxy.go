@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/stringmap"
 	"log"
 	"strings"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/stringmap"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 type DependentConsumerProxy struct {
@@ -117,6 +118,7 @@ func fetchDepConsumers(ctx context.Context,
 
 				// return empty dependsMap and  resources
 				if dependencies.Entities == nil || len(*dependencies.Entities) == 0 {
+					log.Printf("Retrieved dependencies for ID  noresult %v, resourceKey %s, length %d", resources, resourceKey, len(resources))
 					return resources, dependsMap, cyclicDependsList, nil
 				}
 
@@ -126,6 +128,7 @@ func fetchDepConsumers(ctx context.Context,
 					if err != nil {
 						return nil, nil, nil, err
 					}
+					log.Printf("Retrieved dependencies for resourceKey %s, resources %v, length %d", resourceKey, resources, len(resources))
 					return resources, dependsMap, cyclicDependsList, nil
 				}
 
@@ -146,6 +149,7 @@ func fetchDepConsumers(ctx context.Context,
 			}
 		}
 	}
+	log.Printf("Retrieved dependencies for ID %v, resourceKey %s, length %d", resources, resourceKey, len(resources))
 	return resources, dependsMap, cyclicDependsList, nil
 }
 

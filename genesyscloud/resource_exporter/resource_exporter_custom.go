@@ -3,12 +3,13 @@ package resource_exporter
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
 	"log"
 	"regexp"
 	"strings"
 
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
+
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 /*
@@ -179,11 +180,6 @@ func RuleSetSkillPropertyResolver(configMap map[string]interface{}, exporters ma
 	return nil
 }
 
-func FileContentHashResolver(configMap map[string]interface{}, filepath string) error {
-	configMap["file_content_hash"] = fmt.Sprintf(`${filesha256(var.%s)}`, filepath)
-	return nil
-}
-
 func CampaignStatusResolver(configMap map[string]interface{}, exporters map[string]*ResourceExporter, resourceLabel string) error {
 	if configMap["campaign_status"] != "off" && configMap["campaign_status"] != "on" {
 		configMap["campaign_status"] = "off"
@@ -222,4 +218,40 @@ func SetNewFlowResourceExporter(r *ResourceExporter) {
 
 func GetNewFlowResourceExporter() *ResourceExporter {
 	return newFlowResourceExporter
+}
+
+// KnowledgeDocumentLabelNamesResolver resolves the label_names to a list of references to the knowledge label resources name
+// instead of the label name as a string. This is so that the correct creation order is always applied as otherwise knowledge_documents
+// could be created without the label_names set, which makes the consistency checker fail.
+func KnowledgeDocumentLabelNamesResolver(configMap map[string]interface{}, exporters map[string]*ResourceExporter, resourceLabel string) error {
+	labelNames, ok := configMap["label_names"].([]interface{})
+	if !ok || len(labelNames) == 0 {
+		return nil
+	}
+
+	exporter, ok := exporters["genesyscloud_knowledge_label"]
+	if !ok {
+		return nil
+	}
+
+	resolvedNames := make([]string, 0, len(labelNames))
+	for _, labelName := range labelNames {
+		name, ok := labelName.(string)
+		if !ok {
+			continue
+		}
+
+		for _, labelResource := range exporter.SanitizedResourceMap {
+			if strings.HasSuffix(labelResource.BlockLabel, "_"+name) {
+				resolvedNames = append(resolvedNames, fmt.Sprintf("${genesyscloud_knowledge_label.%s.knowledge_label[0].name}", labelResource.BlockLabel))
+				break
+			}
+		}
+	}
+
+	if len(resolvedNames) > 0 {
+		configMap["label_names"] = resolvedNames
+	}
+
+	return nil
 }

@@ -1,9 +1,11 @@
 package architect_flow
 
 import (
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/validators"
 	"strings"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/validators"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
@@ -14,6 +16,7 @@ import (
 
 const (
 	ResourceType = "genesyscloud_flow"
+	S3Enabled    = true
 )
 
 // SetRegistrar registers all resources, data sources and exporters in the package
@@ -32,9 +35,6 @@ func ArchitectFlowExporter() *resourceExporter.ResourceExporter {
 		RefAttrs:         map[string]*resourceExporter.RefAttrSettings{},
 		UnResolvableAttributes: map[string]*schema.Schema{
 			"filepath": ResourceArchitectFlow().Schema["filepath"],
-		},
-		CustomFlowResolver: map[string]*resourceExporter.CustomFlowResolver{
-			"file_content_hash": {ResolverFunc: resourceExporter.FileContentHashResolver},
 		},
 	}
 
@@ -55,7 +55,9 @@ func ArchitectFlowExporter() *resourceExporter.ResourceExporter {
 
 func ResourceArchitectFlow() *schema.Resource {
 	return &schema.Resource{
-		Description: `Genesys Cloud Flow`,
+		Description: `Genesys Cloud Flow.
+
+Export block label: "{type}_{name}"`,
 
 		CreateContext: provider.CreateWithPooledClient(createFlow),
 		UpdateContext: provider.UpdateWithPooledClient(updateFlow),
@@ -64,6 +66,9 @@ func ResourceArchitectFlow() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		CustomizeDiff: customdiff.All(
+			customdiff.ComputedIf("file_content_hash", validators.ValidateFileContentHashChanged("filepath", "file_content_hash", S3Enabled)),
+		),
 		SchemaVersion: 1,
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -87,7 +92,12 @@ func ResourceArchitectFlow() *schema.Resource {
 			"file_content_hash": {
 				Description: "Hash value of the YAML file content. Used to detect changes.",
 				Type:        schema.TypeString,
-				Required:    true,
+				Computed:    true,
+			},
+			"update_trigger_hash": {
+				Description: "A hash value used to trigger resource updates. When this value changes, the resource will be refreshed. Use this to hash external values such as environment variables, outputs from other resources, or timestamps that should initiate an update. By default, `file_content_hash` hashes the content of the file specified by the filepath field to trigger updates. This field can be used as an alternative for greater control over the update triggers.",
+				Type:        schema.TypeString,
+				Optional:    true,
 			},
 			"substitutions": {
 				Description: "A substitution is a key value pair where the key is the value you want to replace, and the value is the value to substitute in its place.",

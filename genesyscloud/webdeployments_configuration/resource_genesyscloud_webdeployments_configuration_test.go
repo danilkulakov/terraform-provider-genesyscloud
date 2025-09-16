@@ -2,19 +2,20 @@ package webdeployments_configuration
 
 import (
 	"fmt"
-	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 type scCustomMessageConfig struct {
@@ -157,7 +158,7 @@ func TestAccResourceWebDeploymentsConfigurationComplex(t *testing.T) {
 	var (
 		// Knowledge Base Settings
 		kbResourceLabel1 = "test-kb-1"
-		kbName1          = "tf-kb-" + uuid.NewString()
+		kbName1          = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		kbDesc1          = "kb created for terraform test 1"
 		kbCoreLang1      = "en-US"
 
@@ -448,12 +449,12 @@ func TestAccResourceWebDeploymentsConfigurationSupportCenter(t *testing.T) {
 	var (
 		// Knowledge Base Settings
 		kbResourceLabel1 = "test-kb-1"
-		kbName1          = "tf-kb-" + uuid.NewString()
+		kbName1          = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		kbDesc1          = "kb created for terraform test 1"
 		kbCoreLang1      = "en-US"
 
 		kbResourceLabel2 = "test-kb-2"
-		kbName2          = "tf-kb-" + uuid.NewString()
+		kbName2          = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		kbDesc2          = "kb created for terraform test 2"
 		kbCoreLang2      = "en-US"
 

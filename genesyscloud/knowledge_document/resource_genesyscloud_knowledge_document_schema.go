@@ -22,13 +22,16 @@ func KnowledgeDocumentExporter() *resourceExporter.ResourceExporter {
 		RefAttrs: map[string]*resourceExporter.RefAttrSettings{
 			"knowledge_base_id": {RefType: "genesyscloud_knowledge_knowledgebase"},
 		},
+		CustomAttributeResolver: map[string]*resourceExporter.RefAttrCustomResolver{
+			"knowledge_document.label_names": {ResolverFunc: resourceExporter.KnowledgeDocumentLabelNamesResolver},
+		},
 	}
 }
 
 const ResourceType = "genesyscloud_knowledge_document"
 
 var (
-	knowledgeDocument = &schema.Resource{
+	knowledgeDocumentResource = &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"title": {
 				Description: "Document title",
@@ -78,7 +81,9 @@ var (
 
 func ResourceKnowledgeDocument() *schema.Resource {
 	return &schema.Resource{
-		Description: "Genesys Cloud Knowledge document",
+		Description: `Genesys Cloud Knowledge document.
+
+Export block label: "{parent knowledge base name}_{title}"`,
 
 		CreateContext: provider.CreateWithPooledClient(createKnowledgeDocument),
 		ReadContext:   provider.ReadWithPooledClient(readKnowledgeDocument),
@@ -99,7 +104,7 @@ func ResourceKnowledgeDocument() *schema.Resource {
 				Type:        schema.TypeList,
 				MaxItems:    1,
 				Required:    true,
-				Elem:        knowledgeDocument,
+				Elem:        knowledgeDocumentResource,
 			},
 			"published": {
 				Description: "If true, the knowledge document will be published. If false, it will be a draft. The document can only be published if it has document variations.",

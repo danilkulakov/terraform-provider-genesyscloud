@@ -2,12 +2,13 @@ package architect_user_prompt
 
 import (
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/fileserver"
 
@@ -16,10 +17,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
-func TestAccResourceUserPromptBasic(t *testing.T) {
+func TestAccResourceArchitectUserPromptBasic(t *testing.T) {
 	userPromptResourceLabel1 := "test-user_prompt_1"
 	userPromptName1 := "TestUserPrompt_1" + strings.Replace(uuid.NewString(), "-", "", -1)
 	userPromptName2 := "TestUserPrompt_2" + strings.Replace(uuid.NewString(), "-", "", -1)
@@ -117,7 +118,7 @@ func TestAccResourceUserPromptBasic(t *testing.T) {
 	})
 }
 
-func TestAccResourceUserPromptWavFile(t *testing.T) {
+func TestAccResourceArchitectUserPromptWavFile(t *testing.T) {
 	userPromptResourceLabel1 := "test-user_prompt_wav_file"
 	userPromptName1 := "TestUserPromptWav_1" + strings.Replace(uuid.NewString(), "-", "", -1)
 	userPromptDescription1 := "Test prompt with wav audio file"
@@ -189,7 +190,7 @@ func TestAccResourceUserPromptWavFile(t *testing.T) {
 	})
 }
 
-func TestAccResourceUserPromptWavFileURL(t *testing.T) {
+func TestAccResourceArchitectUserPromptWavFileURL(t *testing.T) {
 	userPromptResourceLabel1 := "test-user_prompt_wav_file"
 	userPromptName1 := "TestUserPromptWav_1" + strings.Replace(uuid.NewString(), "-", "", -1)
 	userPromptDescription1 := "Test prompt with wav audio file"

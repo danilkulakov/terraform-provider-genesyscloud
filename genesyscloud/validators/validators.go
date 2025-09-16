@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/feature_toggles"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
@@ -27,15 +28,17 @@ import (
 )
 
 func ValidatePhoneNumber(number interface{}, _ cty.Path) diag.Diagnostics {
+	if feature_toggles.BcpModeEnabledExists() {
+		return nil
+	}
 	if numberStr, ok := number.(string); ok {
-
 		utilE164 := util.NewUtilE164Service()
-		formattedNum, err := utilE164.FormatAsValidE164Number(numberStr)
+		validNum, err := utilE164.IsValidE164Number(numberStr)
 		if err != nil {
 			return err
 		}
-		if formattedNum != numberStr {
-			return diag.Errorf("Failed to parse number in an E.164 format.  Passed %s and expected: %s", numberStr, formattedNum)
+		if !validNum {
+			return diag.Errorf("Failed to validate number is in an E.164 format: %s", numberStr)
 		}
 		return nil
 	}
@@ -204,7 +207,7 @@ func ValidatePath(i interface{}, k string) (warnings []string, errors []error) {
 		return warnings, errors
 	}
 
-	_, file, err := files.DownloadOrOpenFile(v)
+	_, file, err := files.DownloadOrOpenFile(context.Background(), v, true)
 	if err != nil {
 		return warnings, append(errors, err)
 	}
@@ -244,7 +247,7 @@ func ValidateCSVFormatWithConfig(filepath string, opts ValidateCSVOptions) error
 	}
 
 	// Open the file
-	_, fileHandler, err := files.DownloadOrOpenFile(filepath)
+	_, fileHandler, err := files.DownloadOrOpenFile(context.Background(), filepath, true)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
@@ -394,11 +397,12 @@ func ValidateLanguageCode(lang interface{}, _ cty.Path) diag.Diagnostics {
 }
 
 // Function factory that returns a custom diff function
-func ValidateFileContentHashChanged(filepathAttr, hashAttr string) customdiff.ResourceConditionFunc {
-	return func(ctx context.Context, d *schema.ResourceDiff, meta interface{}) bool {
+// Note: supportS3 lets us know if the resource is prepared to handle S3 paths (e.g. architect_flow). Once all resources support S3 paths, we can remove this parameter.
+func ValidateFileContentHashChanged(filepathAttr, hashAttr string, supportS3 bool) customdiff.ResourceConditionFunc {
+	return func(ctx context.Context, d *schema.ResourceDiff, meta any) bool {
 		filepath := d.Get(filepathAttr).(string)
 
-		newHash, err := files.HashFileContent(filepath)
+		newHash, err := files.HashFileContent(ctx, filepath, supportS3)
 		if err != nil {
 			log.Printf("Error calculating file content hash: %v", err)
 			return false

@@ -1,20 +1,22 @@
 package routing_utilization
 
 import (
+	"errors"
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	routingUtilizationLabel "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/routing_utilization_label"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 	"log"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	routingUtilizationLabel "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/routing_utilization_label"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func TestAccResourceRoutingUtilizationBasic(t *testing.T) {
@@ -224,32 +226,32 @@ func TestAccResourceRoutingUtilizationWithLabels(t *testing.T) {
 					}
 
 					routingUtilization := s[0]
-					errors := make([]string, 0)
+					allErrors := make([]string, 0)
 
-					assertAttributeEquals(routingUtilization, "", "", &errors)
-					assertAttributeEquals(routingUtilization, "call.0.include_non_acd", "true", &errors)
-					assertAttributeEquals(routingUtilization, "call.0.interruptible_media_types.0", "email", &errors)
-					assertAttributeEquals(routingUtilization, "call.0.maximum_capacity", maxCapacity2, &errors)
-					assertAttributeEquals(routingUtilization, "callback.0.include_non_acd", "true", &errors)
-					assertAttributeEquals(routingUtilization, "callback.0.interruptible_media_types.0", "call", &errors)
-					assertAttributeEquals(routingUtilization, "callback.0.maximum_capacity", maxCapacity2, &errors)
-					assertAttributeEquals(routingUtilization, "chat.0.include_non_acd", "true", &errors)
-					assertAttributeEquals(routingUtilization, "chat.0.interruptible_media_types.0", "call", &errors)
-					assertAttributeEquals(routingUtilization, "chat.0.maximum_capacity", maxCapacity2, &errors)
-					assertAttributeEquals(routingUtilization, "email.0.include_non_acd", "true", &errors)
-					assertAttributeEquals(routingUtilization, "email.0.interruptible_media_types.0", "call", &errors)
-					assertAttributeEquals(routingUtilization, "email.0.maximum_capacity", maxCapacity2, &errors)
-					assertAttributeEquals(routingUtilization, "message.0.include_non_acd", "true", &errors)
-					assertAttributeEquals(routingUtilization, "message.0.interruptible_media_types.0", "call", &errors)
-					assertAttributeEquals(routingUtilization, "message.0.maximum_capacity", maxCapacity2, &errors)
+					assertAttributeEquals(routingUtilization, "", "", &allErrors)
+					assertAttributeEquals(routingUtilization, "call.0.include_non_acd", "true", &allErrors)
+					assertAttributeEquals(routingUtilization, "call.0.interruptible_media_types.0", "email", &allErrors)
+					assertAttributeEquals(routingUtilization, "call.0.maximum_capacity", maxCapacity2, &allErrors)
+					assertAttributeEquals(routingUtilization, "callback.0.include_non_acd", "true", &allErrors)
+					assertAttributeEquals(routingUtilization, "callback.0.interruptible_media_types.0", "call", &allErrors)
+					assertAttributeEquals(routingUtilization, "callback.0.maximum_capacity", maxCapacity2, &allErrors)
+					assertAttributeEquals(routingUtilization, "chat.0.include_non_acd", "true", &allErrors)
+					assertAttributeEquals(routingUtilization, "chat.0.interruptible_media_types.0", "call", &allErrors)
+					assertAttributeEquals(routingUtilization, "chat.0.maximum_capacity", maxCapacity2, &allErrors)
+					assertAttributeEquals(routingUtilization, "email.0.include_non_acd", "true", &allErrors)
+					assertAttributeEquals(routingUtilization, "email.0.interruptible_media_types.0", "call", &allErrors)
+					assertAttributeEquals(routingUtilization, "email.0.maximum_capacity", maxCapacity2, &allErrors)
+					assertAttributeEquals(routingUtilization, "message.0.include_non_acd", "true", &allErrors)
+					assertAttributeEquals(routingUtilization, "message.0.interruptible_media_types.0", "call", &allErrors)
+					assertAttributeEquals(routingUtilization, "message.0.maximum_capacity", maxCapacity2, &allErrors)
 
 					numberOfLabelUtilizations, _ := strconv.Atoi(routingUtilization.Attributes["label_utilizations.#"])
 					if numberOfLabelUtilizations != 0 {
-						errors = append(errors, fmt.Sprintf("expected no label_utilizations, found %s", routingUtilization.Attributes["label_utilizations.#"]))
+						allErrors = append(allErrors, fmt.Sprintf("expected no label_utilizations, found %s", routingUtilization.Attributes["label_utilizations.#"]))
 					}
 
-					if len(errors) > 0 {
-						return fmt.Errorf(strings.Join(errors[:], "\n"))
+					if len(allErrors) > 0 {
+						return errors.New(strings.Join(allErrors[:], "\n"))
 					}
 
 					return nil

@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 
 	lists "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
 
@@ -77,13 +77,8 @@ type DataSourceResolver struct {
 
 // RefAttrCustomResolver allows the definition of a custom resolver for an exporter.
 type RefAttrCustomResolver struct {
-	ResolverFunc            func(map[string]interface{}, map[string]*ResourceExporter, string) error
-	ResolveToDataSourceFunc func(map[string]interface{}, any, *platformclientv2.Configuration) (string, string, map[string]interface{}, bool)
-}
-
-// CustomFlowResolver allows the definition of a custom resolver for an exporter.
-type CustomFlowResolver struct {
-	ResolverFunc func(map[string]interface{}, string) error
+	ResolverFunc            func(configMap map[string]interface{}, exporters map[string]*ResourceExporter, resourceLabel string) error
+	ResolveToDataSourceFunc func(configMap map[string]interface{}, originalValue any, sdkConfig *platformclientv2.Configuration) (string, string, map[string]interface{}, bool)
 }
 
 type CustomFileWriterSettings struct {
@@ -155,6 +150,10 @@ type ResourceExporter struct {
 	// When all specified inner attributes are missing from an object, that object is removed
 	RemoveIfMissing map[string][]string
 
+	// RemoveIfSelfReferential is a list of attributes that should be removed from the export config
+	// if the value matches the id of the resource.
+	RemoveIfSelfReferential []string
+
 	// Map of resource id->labels. This is set after a call to loadSanitizedResourceMap
 	SanitizedResourceMap ResourceIDMetaMap
 	// List of attributes to exclude from config. This is set by the export configuration.
@@ -170,8 +169,6 @@ type ResourceExporter struct {
 	EncodedRefAttrs map[*JsonEncodeRefAttr]*RefAttrSettings
 
 	CustomFileWriter CustomFileWriterSettings
-
-	CustomFlowResolver map[string]*CustomFlowResolver
 
 	ExportAsDataFunc func(context.Context, *platformclientv2.Configuration, map[string]string) (bool, error)
 
@@ -205,6 +202,31 @@ func (r *ResourceExporter) LoadSanitizedResourceMap(ctx context.Context, resourc
 	sanitizer.S.Sanitize(r.SanitizedResourceMap)
 
 	return nil
+}
+
+// Thread-safe methods for accessing SanitizedResourceMap
+func (r *ResourceExporter) GetSanitizedResourceMap() ResourceIDMetaMap {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return r.SanitizedResourceMap
+}
+
+func (r *ResourceExporter) SetSanitizedResourceMap(resourceMap ResourceIDMetaMap) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.SanitizedResourceMap = resourceMap
+}
+
+func (r *ResourceExporter) RemoveFromSanitizedResourceMap(id string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	delete(r.SanitizedResourceMap, id)
+}
+
+func (r *ResourceExporter) GetSanitizedResourceMapSize() int {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return len(r.SanitizedResourceMap)
 }
 
 func (r *ResourceExporter) GetRefAttrSettings(attribute string) *RefAttrSettings {
@@ -315,6 +337,18 @@ func (r *ResourceExporter) RemoveFieldIfMissing(attribute string, config map[str
 			}
 		}
 		return missingAll
+	}
+	return false
+}
+
+func (r *ResourceExporter) RemoveFieldIfSelfReferential(resourceId, fullAttribute, attributeKey string, config map[string]interface{}) bool {
+	if ok := lists.ItemInSlice(fullAttribute, r.RemoveIfSelfReferential); ok {
+		attributeValue := config[attributeKey]
+		if attributeValue == nil {
+			return false
+		}
+		attributeStr := attributeValue.(string)
+		return attributeStr == resourceId
 	}
 	return false
 }

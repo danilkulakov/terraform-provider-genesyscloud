@@ -2,23 +2,24 @@ package knowledge_document_variation
 
 import (
 	"fmt"
+	"strings"
+	"testing"
+
 	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	"strings"
-	"testing"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func TestAccResourceKnowledgeDocumentVariationBasic(t *testing.T) {
 	var (
 		variationResourceLabel1         = "test-variation1"
 		knowledgeBaseResourceLabel1     = "test-knowledgebase1"
-		knowledgeBaseName1              = "Terraform Knowledge Base " + uuid.NewString()
+		knowledgeBaseName1              = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		knowledgeBaseDescription1       = "test-knowledgebase-description1"
 		coreLanguage1                   = "en-US"
 		knowledgeDocumentResourceLabel1 = "test-knowledge-document1"
@@ -157,7 +158,7 @@ func TestAccResourceKnowledgeDocumentVariationDifferentTypes(t *testing.T) {
 	var (
 		variationResourceLabel1         = "test-variation1"
 		knowledgeBaseResourceLabel1     = "test-knowledgebase1"
-		knowledgeBaseName1              = "Terraform Knowledge Base " + uuid.NewString()
+		knowledgeBaseName1              = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		knowledgeBaseDescription1       = "test-knowledgebase-description1"
 		coreLanguage1                   = "en-US"
 		knowledgeDocumentResourceLabel1 = "test-knowledge-document1"

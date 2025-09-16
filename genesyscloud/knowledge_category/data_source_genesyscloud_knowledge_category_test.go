@@ -2,10 +2,11 @@ package knowledge_category
 
 import (
 	"fmt"
+	"testing"
+
 	knowledgeKnowledgebase "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/knowledge_knowledgebase"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	"testing"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -17,7 +18,7 @@ func TestAccDataSourceKnowledgeCategoryBasic(t *testing.T) {
 		categoryResourceLabel1      = "test-category1"
 		categoryName                = "Terraform Test Category 1-" + uuid.NewString()
 		categoryDescription         = "category description"
-		knowledgeBaseName1          = "Terraform Test Knowledge Base 1-" + uuid.NewString()
+		knowledgeBaseName1          = "Test-Terraform-Knowledge-Base" + uuid.NewString()
 		knowledgeBaseDescription1   = "test-knowledgebase-description1"
 		knowledgeBaseCoreLanguage1  = "en-US"
 
@@ -27,6 +28,7 @@ func TestAccDataSourceKnowledgeCategoryBasic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { util.TestAccPreCheck(t) },
 		ProviderFactories: provider.GetProviderFactories(providerResources, providerDataSources),
+		CheckDestroy:      testVerifyKnowledgeCategoryDestroyed,
 		Steps: []resource.TestStep{
 			{
 				// Create

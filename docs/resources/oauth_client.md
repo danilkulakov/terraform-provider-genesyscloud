@@ -20,7 +20,7 @@ The following Genesys Cloud APIs are used by this resource. Ensure your OAuth Cl
 ## Example Usage
 
 ```terraform
-resource "genesyscloud_oauth_client" "example-client" {
+resource "genesyscloud_oauth_client" "example_client_credential" {
   name                          = "Example OAuth Client"
   description                   = "For example purposes only"
   access_token_validity_seconds = 600
@@ -28,11 +28,11 @@ resource "genesyscloud_oauth_client" "example-client" {
   authorized_grant_type         = "CODE"
   scopes                        = ["users"]
   state                         = "active"
-  roles {
-    // Roles are only applicable to CLIENT_CREDENTIAL grants
-    role_id     = genesyscloud_auth_role.employee.id
-    division_id = genesyscloud_auth_division.testing.id
-  }
+  # roles {
+  #   // Roles are only applicable to CLIENT-CREDENTIALS grants
+  #   role_id     = genesyscloud_auth_role.agent_role.id
+  #   division_id = data.genesyscloud_auth_division_home.home.id
+  # }
 }
 ```
 
@@ -47,9 +47,10 @@ resource "genesyscloud_oauth_client" "example-client" {
 ### Optional
 
 - `access_token_validity_seconds` (Number) The number of seconds, between 5mins and 48hrs, until tokens created with this client expire. Only clients using Genesys Cloud SCIM (Identity Management) can have a maximum duration of 38880000secs/450 days. Defaults to `86400`.
-- `client_secret` (String, Sensitive) Place holder that can be referred in integration_credential fields. Sensitive info
+- `client_secret` (String, Sensitive) Place holder that can be referred in integration_credential fields. Sensitive info. Only populated when expose_client_secret is true.
 - `description` (String) The description of the OAuth client.
 - `directory_client_secret` (String) Directory where the secret can be stored.
+- `expose_client_secret` (Boolean) Set this attribute to true to expose the client_secret as a sensitive output. This stores the secret in the Terraform state Defaults to `false`.
 - `integration_credential_name` (String) Optionally, a Name of a Integration Credential (with credential type pureCloudOAuthClient) to be created using this new OAuth Client.
 - `registered_redirect_uris` (Set of String) List of allowed callbacks for this client. For example: https://myapp.example.com/auth/callback.
 - `roles` (Block Set) Set of roles and their corresponding divisions associated with this client. Roles must be set for clients using the CLIENT-CREDENTIALS grant. The roles must also already be assigned to the OAuth Client used by Terraform. (see [below for nested schema](#nestedblock--roles))

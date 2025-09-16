@@ -3,15 +3,16 @@ package outbound_contact_list
 import (
 	"context"
 	"fmt"
-	rc "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_cache"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/tfexporter_state"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	rc "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_cache"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/tfexporter_state"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
+
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 /*
@@ -320,7 +321,7 @@ func getContactListContactsExportUrlFn(_ context.Context, p *OutboundContactlist
 
 // createBulkOutboundContactsFormData creates the form data attributes to create a bulk upload of contacts in Genesys Cloud
 func createBulkOutboundContactsFormData(filePath, contactListId, contactIdColumnName string) (map[string]io.Reader, error) {
-	fileReader, _, err := files.DownloadOrOpenFile(filePath)
+	fileReader, _, err := files.DownloadOrOpenFile(context.Background(), filePath, S3Enabled)
 	if err != nil {
 		return nil, err
 	}

@@ -3,18 +3,19 @@ package architect_user_prompt
 import (
 	"context"
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	files "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
+	files "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/files"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/resourcedata"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 type PromptAudioData struct {
@@ -111,7 +112,7 @@ func updateFilenamesInExportConfigMap(configMap map[string]interface{}, audioDat
 				res.State.Attributes[fmt.Sprintf("resources.%s.%s", resourceID, "filename")] = fileNameVal
 				res.State.Attributes[fmt.Sprintf("resources.%s.%s", resourceID, "file_content_hash")] = fileContentVal
 				fullPath := filepath.Join(exportDir, subDir)
-				hash, er := files.HashFileContent(filepath.Join(fullPath, fileName))
+				hash, er := files.HashFileContent(context.Background(), filepath.Join(fullPath, fileName), S3Enabled)
 				if er != nil {
 					log.Printf("Error Calculating Hash '%s' ", er)
 				} else {

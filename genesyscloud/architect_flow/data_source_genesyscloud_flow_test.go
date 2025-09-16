@@ -2,26 +2,28 @@ package architect_flow
 
 import (
 	"fmt"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/testrunner"
+
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/provider"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util"
 
 	"github.com/google/uuid"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
-func TestAccDataSourceFlow(t *testing.T) {
+func TestAccDataSourceArchitectFlow(t *testing.T) {
 	var (
 		flowDataSourceLabel = "flow-data"
 		flowName            = "test_data_flow" + uuid.NewString()
 		inboundcallConfig   = fmt.Sprintf("inboundCall:\n  name: %s\n  defaultLanguage: en-us\n  startUpRef: ./menus/menu[mainMenu]\n  initialGreeting:\n    tts: Archy says hi!!!\n  menus:\n    - menu:\n        name: Main Menu\n        audio:\n          tts: You are at the Main Menu, press 9 to disconnect.\n        refId: mainMenu\n        choices:\n          - menuDisconnect:\n              name: Disconnect\n              dtmf: digit_9", flowName)
 
 		flowResourceLabel = "test_flow"
-		filePath          = filepath.Join(testrunner.RootDir, "examples", "resources", "genesyscloud_flow", "inboundcall_flow_example.yaml")
+		filePath          = filepath.Join(testrunner.RootDir, "examples", "resources", ResourceType, "inboundcall_flow_example.yaml")
 	)
 
 	resource.Test(t, resource.TestCase{

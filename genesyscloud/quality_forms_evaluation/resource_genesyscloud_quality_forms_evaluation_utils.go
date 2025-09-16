@@ -7,7 +7,7 @@ import (
 	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/lists"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func buildSdkQuestionGroups(d *schema.ResourceData) *[]platformclientv2.Evaluationquestiongroup {
@@ -102,7 +102,7 @@ func BuildSdkAnswerOptions(answerOptions []interface{}) *[]platformclientv2.Answ
 }
 
 func BuildSdkVisibilityCondition(visibilityCondition []interface{}) *platformclientv2.Visibilitycondition {
-	if visibilityCondition == nil || len(visibilityCondition) <= 0 {
+	if len(visibilityCondition) <= 0 {
 		return nil
 	}
 
@@ -251,7 +251,7 @@ func GenerateEvaluationFormResource(resourceLabel string, evaluationForm *Evalua
 	}
 	`, ResourceType, resourceLabel,
 		evaluationForm.Name,
-		evaluationForm.Published,
+		strconv.FormatBool(evaluationForm.Published),
 		GenerateEvaluationFormQuestionGroups(&evaluationForm.QuestionGroups),
 	)
 }
@@ -346,7 +346,7 @@ func GenerateFormAnswerOptions(answerOptions *[]AnswerOptionStruct) string {
 		answerOptionsString += answerOptionString
 	}
 
-	return fmt.Sprintf(`%s`, answerOptionsString)
+	return answerOptionsString
 }
 
 func GenerateFormVisibilityCondition(condition *VisibilityConditionStruct) string {

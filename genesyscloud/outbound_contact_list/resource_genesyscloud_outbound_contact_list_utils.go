@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,7 +19,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 func buildSdkOutboundContactListContactPhoneNumberColumnSlice(contactPhoneNumberColumn *schema.Set) *[]platformclientv2.Contactphonenumbercolumn {
@@ -213,28 +215,40 @@ func ContactsExporterResolver(resourceId, exportDirectory, subDirectory string, 
 		}
 		return resp, nil
 	}, 400)
+
 	if diagErr != nil {
 		return fmt.Errorf(`error initiating contact list export: %v`, diagErr)
 	}
+
 	retryAttempt := 1
 	diagErr = util.RetryWhen(util.IsStatus404, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
 		log.Printf("Waiting for signed export URL for contact list %s", contactListName)
-		// Sleep at least 30 secs before attempting to retrieve export url to give the system time to be able to generate the URL
-		// This has an exponential backoff to permit large lists the time to process and serve up the export signed url
-		time.Sleep(time.Duration(30*retryAttempt) * time.Second)
 		var err error
 		var resp *platformclientv2.APIResponse
 		exportUrl, resp, err = cp.getContactListContactsExportUrl(ctx, contactListId)
-		if err != nil {
-			retryAttempt += 1
+		if err == nil {
+			return resp, nil
+		}
+
+		// not a retry error so don't sleep
+		if !util.IsStatus404(resp) && !util.IsStatus400(resp) {
 			return resp, diag.FromErr(err)
 		}
-		return resp, nil
 
-	}, 400)
+		// Give the system time to generate the URL
+		// Exponential backoff - 1st sleep: 2 seconds, 10th sleep: 1024 seconds (total: 2046 seconds/34 minutes)
+		waitTime := time.Duration(2*math.Pow(2, float64(retryAttempt)-1)) * time.Second
+		log.Printf("Sleeping for %f seconds before retrying", waitTime.Seconds())
+		time.Sleep(waitTime)
+
+		retryAttempt += 1
+		return resp, diag.FromErr(err)
+	}, http.StatusBadRequest)
+
 	if diagErr != nil {
 		return fmt.Errorf(`error retrieving signed export url for contact list: %v`, diagErr)
 	}
+
 	diagErr = util.RetryWhen(util.IsStatus404, func() (*platformclientv2.APIResponse, diag.Diagnostics) {
 		log.Printf("Downloading exported contacts for contact list %s", contactListName)
 		resp, err := files.DownloadExportFileWithAccessToken(fullDirectoryPath, exportFileName, exportUrl, sdkConfig.AccessToken)
@@ -256,7 +270,7 @@ func ContactsExporterResolver(resourceId, exportDirectory, subDirectory string, 
 	// Remove read only attributes from the config file
 	delete(configMap, "contacts_file_content_hash")
 	delete(configMap, "contacts_record_count")
-	hash, err := files.HashFileContent(fullCurrentPath)
+	hash, err := files.HashFileContent(ctx, fullCurrentPath, S3Enabled)
 	if err != nil {
 		log.Printf("Error calculating file content hash: %v", err)
 		return err

@@ -3,18 +3,21 @@ package provider
 import (
 	"context"
 	"fmt"
-	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
-	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
-	prl "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/panic_recovery_logger"
 	"log"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/mrmo"
+	resourceExporter "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/resource_exporter"
+	"github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/constants"
+	prl "github.com/mypurecloud/terraform-provider-genesyscloud/genesyscloud/util/panic_recovery_logger"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/mypurecloud/platform-client-sdk-go/v157/platformclientv2"
+	"github.com/mypurecloud/platform-client-sdk-go/v165/platformclientv2"
 )
 
 const (
@@ -26,6 +29,8 @@ const (
 	DefaultMaxClients = 10
 	MinClients        = 1
 	MaxClients        = 20
+
+	AbsoluteDynamicMaxClients = 50 // Maximum clients the pool can grow to dynamically
 
 	// Logging intervals
 	MetricsLoggingInterval = 5 * time.Minute
@@ -43,6 +48,7 @@ const (
 // increases throughput as each token will have its own rate limit.
 type SDKClientPool struct {
 	Pool    chan *platformclientv2.Configuration
+	ctx     context.Context
 	config  *SDKClientPoolConfig
 	metrics *poolMetrics
 	done    chan struct{} // For cleanup
@@ -53,6 +59,7 @@ type SDKClientPoolConfig struct {
 	InitTimeout    time.Duration
 	MaxClients     int
 	DebugLogging   bool
+	Version        string
 }
 
 type poolMetrics struct {
@@ -82,6 +89,18 @@ func (m *poolMetrics) recordRelease() {
 var SdkClientPool *SDKClientPool
 var SdkClientPoolErr diag.Diagnostics
 var Once sync.Once
+
+// ResetSDKClientPool resets the global client pool for testing purposes
+func ResetSDKClientPool() {
+	if SdkClientPool != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = SdkClientPool.Reset(ctx)
+	}
+	SdkClientPool = nil
+	SdkClientPoolErr = nil
+	Once = sync.Once{} // Reset the Once to allow re-initialization
+}
 
 // InitSDKClientPool creates a new Pool of Clients with the given provider config
 // This must be called during provider initialization before the Pool is used
@@ -126,6 +145,7 @@ func InitSDKClientPool(ctx context.Context, version string, providerConfig *sche
 			AcquireTimeout: acquireTimeout,
 			InitTimeout:    initTimeout,
 			DebugLogging:   providerConfig.Get(AttrSdkClientPoolDebug).(bool),
+			Version:        version,
 		}
 
 		SdkClientPool = &SDKClientPool{
@@ -133,9 +153,11 @@ func InitSDKClientPool(ctx context.Context, version string, providerConfig *sche
 			config:  config,
 			metrics: &poolMetrics{},
 			done:    make(chan struct{}),
+			ctx:     ctx,
 		}
 		SdkClientPool.logDebug("Initialized %d SDK clients in the Pool with acquire timeout %v and init timeout %v.", max, acquireTimeout, initTimeout)
 
+		setProviderConfig(providerConfig)
 		SdkClientPool.startMetricsLogging()
 		SdkClientPoolErr = SdkClientPool.preFill(ctx, providerConfig, version)
 	})
@@ -161,7 +183,10 @@ func (p *SDKClientPool) startMetricsLogging() {
 
 func (p *SDKClientPool) logDebug(msg string, args ...interface{}) {
 	if p.config.DebugLogging {
-		log.Printf("[DEBUG] "+msg, args...)
+		formattedMsg := fmt.Sprintf("[DEBUG] "+msg, args...)
+		tflog.Debug(p.ctx, formattedMsg)
+		// Also log to standard logger for test capture
+		log.Println(formattedMsg)
 	}
 }
 
@@ -288,44 +313,79 @@ func (p *SDKClientPool) preFill(ctx context.Context, providerConfig *schema.Reso
 			return resultErr
 		}
 		p.logDebug("Successfully pre-filled client pool - %s", p.formatMetrics())
+		// Also log to standard logger for test capture when debug is enabled
+		if p.config.DebugLogging {
+			log.Printf("Successfully pre-filled client pool - %s", p.formatMetrics())
+		}
 		return nil
 	case <-ctx.Done():
 		p.logDebug("Timed out pre-filling client pool - %s", p.formatMetrics())
+		// Also log to standard logger for test capture when debug is enabled
+		if p.config.DebugLogging {
+			log.Printf("Timed out pre-filling client pool - %s", p.formatMetrics())
+		}
 		return diag.Errorf("Timed out pre-filling client pool: %v", ctx.Err())
 	}
 }
 
 func (p *SDKClientPool) acquire(ctx context.Context) (*platformclientv2.Configuration, error) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, p.config.AcquireTimeout)
-	defer cancel()
+	// Try to acquire with retry logic
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		timeoutCtx, cancel := context.WithTimeout(ctx, p.config.AcquireTimeout)
 
-	select {
-	case client := <-p.Pool:
-		if client == nil {
-			return nil, fmt.Errorf("received nil client from the pool")
+		select {
+		case client := <-p.Pool:
+			cancel()
+			if client == nil {
+				return nil, fmt.Errorf("received nil client from the pool")
+			}
+			p.metrics.recordAcquire()
+
+			acquiredMsg := "Client acquired from pool"
+
+			remaining := int64(p.config.MaxClients) - atomic.LoadInt64(&p.metrics.activeClients)
+			if remaining <= int64(PoolCriticalThreshold) {
+				p.logDebug("[WARN] %s but pool at critical capacity - %s", acquiredMsg, p.formatMetrics())
+			} else if remaining <= int64(PoolNearCapacityThreshold) {
+				p.logDebug("[WARN] %s with pool near capacity - %s", acquiredMsg, p.formatMetrics())
+			} else {
+				p.logDebug("%s - %s", acquiredMsg, p.formatMetrics())
+			}
+			// Also log to standard logger for test capture when debug is enabled
+			if p.config.DebugLogging {
+				log.Printf("%s - %s", acquiredMsg, p.formatMetrics())
+			}
+			return client, nil
+		case <-timeoutCtx.Done():
+			cancel()
+			p.metrics.mu.Lock()
+			p.metrics.acquireTimeouts++
+			p.metrics.mu.Unlock()
+			p.logDebug("[WARN] Client acquisition timeout (attempt %d/%d) - %s", attempt+1, maxRetries, p.formatMetrics())
+
+			// Try to add more clients to the pool when timeout occurs
+			go p.AdjustPoolForTimeout(p.config.Version)
+
+			// If this is the last attempt, return error
+			if attempt == maxRetries-1 {
+				return nil, fmt.Errorf("timeout after %v waiting for available client (after %d retries): %v", p.config.AcquireTimeout, maxRetries, timeoutCtx.Err())
+			}
+
+			// Wait a bit before retrying
+			select {
+			case <-time.After(2 * time.Second):
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		case <-ctx.Done():
+			cancel()
+			return nil, ctx.Err()
 		}
-		p.metrics.recordAcquire()
-
-		acquiredMsg := "Client acquired from pool"
-
-		remaining := int64(p.config.MaxClients) - atomic.LoadInt64(&p.metrics.activeClients)
-		if remaining <= int64(PoolCriticalThreshold) {
-			p.logDebug("[WARN] %s but pool at critical capacity - %s", acquiredMsg, p.formatMetrics())
-		} else if remaining <= int64(PoolNearCapacityThreshold) {
-			p.logDebug("[WARN] %s with pool near capacity - %s", acquiredMsg, p.formatMetrics())
-		} else {
-			p.logDebug("%s - %s", acquiredMsg, p.formatMetrics())
-		}
-		return client, nil
-	case <-timeoutCtx.Done():
-		p.metrics.mu.Lock()
-		p.metrics.acquireTimeouts++
-		p.metrics.mu.Unlock()
-		p.logDebug("[WARN] Client acquisition timeout - %s", p.formatMetrics())
-		return nil, fmt.Errorf("timeout after %v waiting for available client: %v", p.config.AcquireTimeout, timeoutCtx.Err())
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
+
+	return nil, fmt.Errorf("failed to acquire client after %d attempts", maxRetries)
 }
 
 func (p *SDKClientPool) release(c *platformclientv2.Configuration) error {
@@ -341,6 +401,10 @@ func (p *SDKClientPool) release(c *platformclientv2.Configuration) error {
 
 		if atomic.LoadInt64(&p.metrics.activeClients) <= int64(p.config.MaxClients-PoolCriticalThreshold) {
 			p.logDebug("Client released from full pool - %s", p.formatMetrics())
+			// Also log to standard logger for test capture when debug is enabled
+			if p.config.DebugLogging {
+				log.Printf("Client released from full pool - %s", p.formatMetrics())
+			}
 		}
 		return nil
 
@@ -444,6 +508,40 @@ func (p *SDKClientPool) Close(ctx context.Context) error {
 	}
 }
 
+// Reset quickly drains the pool without cleanup for testing purposes
+func (p *SDKClientPool) Reset(ctx context.Context) error {
+	metrics := p.GetMetrics()
+	if metrics.activeClients > 0 {
+		p.logDebug("[WARN] Resetting pool with %d active clients", metrics.activeClients)
+	}
+
+	if p.done == nil {
+		return nil
+	}
+	close(p.done) // Signal all goroutines to stop
+	p.done = nil
+
+	// Quick drain without cleanup - just discard configurations
+	drainCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	drained := 0
+	for {
+		select {
+		case c := <-p.Pool:
+			drained++
+			// Just discard the configuration - no cleanup needed
+			_ = c
+		case <-drainCtx.Done():
+			p.logDebug("Reset SDK client pool after draining %d clients - %s", drained, p.formatMetrics())
+			return nil
+		default:
+			p.logDebug("Reset SDK client pool after draining %d clients - %s", drained, p.formatMetrics())
+			return nil
+		}
+	}
+}
+
 func (p *SDKClientPool) GetMetrics() poolMetrics {
 	p.metrics.mu.RLock()
 	defer p.metrics.mu.RUnlock()
@@ -455,6 +553,188 @@ func (p *SDKClientPool) GetMetrics() poolMetrics {
 		acquireTimeouts: p.metrics.acquireTimeouts,
 		lastAcquireTime: p.metrics.lastAcquireTime,
 	}
+}
+
+// AddClientsToPool adds new client connections to the existing pool without reinitializing it
+func (p *SDKClientPool) AddClientsToPool(ctx context.Context, providerConfig *schema.ResourceData, version string, numClients int) diag.Diagnostics {
+	if numClients <= 0 {
+		return nil
+	}
+
+	p.logDebug("Adding %d new client connections to existing pool", numClients)
+
+	errorChan := make(chan diag.Diagnostics, numClients)
+	var wg sync.WaitGroup
+
+	// Create a semaphore to limit concurrent initializations (similar to preFill)
+	concurrentInits := int(math.Min(
+		float64(numClients),
+		math.Max(5, float64(numClients/4))))
+	sem := make(chan struct{}, concurrentInits)
+
+	// Create a done channel for signaling goroutine cleanup
+	addDone := make(chan struct{})
+	defer close(addDone)
+
+	for i := 0; i < numClients; i++ {
+		sdkConfig := platformclientv2.NewConfiguration()
+		wg.Add(1)
+		go func(config *platformclientv2.Configuration, clientNum int) {
+			defer wg.Done()
+			defer func() {
+				<-sem // Release semaphore
+			}()
+
+			// Try to acquire semaphore with context awareness
+			select {
+			case sem <- struct{}{}: // Acquire semaphore
+			case <-ctx.Done():
+				return
+			case <-addDone:
+				return
+			}
+
+			if err := InitClientConfig(ctx, providerConfig, version, config, false); err != nil {
+				select {
+				case errorChan <- err:
+				case <-ctx.Done():
+					p.logDebug("[WARN] Context cancelled while trying to send error: %v", err)
+				default:
+				}
+				return
+			}
+
+			// Try to add to pool with context awareness
+			cleanup := false
+			select {
+			case p.Pool <- config:
+				// Successfully added to the pool
+				p.logDebug("Successfully added client %d to pool", clientNum+1)
+			case <-ctx.Done():
+				cleanup = true
+			case <-addDone:
+				cleanup = true
+			case <-time.After(30 * time.Second):
+				cleanup = true
+			}
+
+			// Cleanup the config if we can't add it to the pool
+			if cleanup {
+				if err := cleanupConfiguration(config); err != nil {
+					p.logDebug("Error cleaning up configuration during cancellation: %v", err)
+				}
+			}
+		}(sdkConfig, i)
+	}
+
+	// Use a separate goroutine to collect errors
+	var resultErr diag.Diagnostics
+	errDone := make(chan struct{})
+	go func() {
+		defer close(errDone)
+		for {
+			select {
+			case err, ok := <-errorChan:
+				if !ok {
+					return
+				}
+				resultErr = append(resultErr, err...)
+			case <-ctx.Done():
+				return
+			case <-addDone:
+				return
+			}
+		}
+	}()
+
+	// Wait for completion or context cancellation
+	go func() {
+		wg.Wait()
+		close(errorChan)
+	}()
+
+	// Wait until either WaitGroup is done or an error is received
+	select {
+	case <-errDone:
+		if resultErr != nil {
+			p.logDebug("Error adding clients to pool - %s", p.formatMetrics())
+			return resultErr
+		}
+		p.logDebug("Successfully added %d clients to pool - %s", numClients, p.formatMetrics())
+		return nil
+	case <-ctx.Done():
+		p.logDebug("Timed out adding clients to pool - %s", p.formatMetrics())
+		return diag.Errorf("Timed out adding clients to pool: %v", ctx.Err())
+	}
+}
+
+// AdjustPoolForTimeout attempts to add new client connections to the pool when timeout errors are encountered
+// This function is designed to be fail-safe and will not cause the calling process to fail
+func (p *SDKClientPool) AdjustPoolForTimeout(version string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[AdjustPoolForTimeout] PANIC recovered in pool adjustment: %v", r)
+		}
+	}()
+
+	log.Printf("[AdjustPoolForTimeout] Attempting to add new client connections to existing pool")
+
+	// Get current pool configuration
+	currentMaxClients := p.GetMaxClients()
+
+	log.Printf("[AdjustPoolForTimeout] Current pool maximum: %d", currentMaxClients)
+
+	// Add only 1 client per timeout
+	newClientsToAdd := 1
+
+	// Check if adding 1 client would exceed the absolute dynamic maximum
+	if currentMaxClients >= AbsoluteDynamicMaxClients {
+		log.Printf("[AdjustPoolForTimeout] Pool already at absolute dynamic maximum capacity (%d), cannot add more clients", AbsoluteDynamicMaxClients)
+		return
+	}
+
+	// Calculate new maximum
+	newMaxClients := currentMaxClients + newClientsToAdd
+
+	log.Printf("[AdjustPoolForTimeout] Increasing pool maximum from %d to %d", currentMaxClients, newMaxClients)
+
+	// Update the pool configuration to the new maximum
+	p.config.MaxClients = newMaxClients
+
+	log.Printf("[AdjustPoolForTimeout] Adding %d new client connection to existing pool", newClientsToAdd)
+
+	// Create a context with a reasonable timeout for adding new clients
+	// Use a shorter timeout to prevent blocking the export process for too long
+	addCtx, addCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer addCancel()
+
+	// Get the provider configuration
+	providerConfig := GetProviderConfig()
+	if providerConfig == nil {
+		log.Printf("[AdjustPoolForTimeout] WARNING: Could not get provider configuration")
+		return
+	}
+
+	// Use the AddClientsToPool method with error handling
+	// This is blocking but with a timeout to prevent hanging
+	err := p.AddClientsToPool(addCtx, providerConfig, version, newClientsToAdd)
+	if err != nil {
+		log.Printf("[AdjustPoolForTimeout] WARNING: Failed to add clients to pool: %v", err)
+		log.Printf("[AdjustPoolForTimeout] Continuing process without pool adjustment")
+		return
+	}
+
+	log.Printf("[AdjustPoolForTimeout] Successfully added %d new client connection to pool", newClientsToAdd)
+	log.Printf("[AdjustPoolForTimeout] Pool capacity increased from %d to %d clients",
+		currentMaxClients, newMaxClients)
+}
+
+// Helper function to find minimum of two values
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 type resContextFunc func(context.Context, *schema.ResourceData, interface{}) diag.Diagnostics
@@ -482,7 +762,7 @@ func DeleteWithPooledClient(method resContextFunc) schema.DeleteContextFunc {
 }
 
 func wrapWithRecover(method resContextFunc, operation constants.CRUDOperation) resContextFunc {
-	return func(ctx context.Context, r *schema.ResourceData, meta any) (diagErr diag.Diagnostics) {
+	return func(ctx context.Context, r *schema.ResourceData, meta any) (diags diag.Diagnostics) {
 		panicRecoverLogger := prl.GetPanicRecoveryLoggerInstance()
 		if !panicRecoverLogger.LoggerEnabled {
 			return method(ctx, r, meta)
@@ -490,9 +770,11 @@ func wrapWithRecover(method resContextFunc, operation constants.CRUDOperation) r
 
 		defer func() {
 			if r := recover(); r != nil {
+				log.Printf("[WARN] Panic recovered in %s: %v", operation, r)
 				err := panicRecoverLogger.HandleRecovery(r, operation)
 				if err != nil {
-					diagErr = diag.FromErr(err)
+					log.Printf("[WARN] Panic recovery failed for operation %s: %s", operation, err.Error())
+					diags = append(diags, diag.FromErr(err)...)
 				}
 			}
 		}()
@@ -505,13 +787,29 @@ func wrapWithRecover(method resContextFunc, operation constants.CRUDOperation) r
 // and automatically return it to the Pool on completion
 func runWithPooledClient(method resContextFunc) resContextFunc {
 	return func(ctx context.Context, r *schema.ResourceData, meta interface{}) diag.Diagnostics {
+		if mrmo.IsActive() {
+			clientConfig, err := mrmo.GetClientConfig()
+			if err != nil {
+				return diag.FromErr(err)
+			}
+			newMeta := *meta.(*ProviderMeta)
+			newMeta.ClientConfig = clientConfig
+			return method(ctx, r, &newMeta)
+		}
+
 		clientConfig, err := SdkClientPool.acquire(ctx)
 		if err != nil {
 			return diag.FromErr(err)
 		}
+
+		// Ensure client is always released, even on panic
+		released := false
 		defer func() {
-			if err := SdkClientPool.release(clientConfig); err != nil {
-				log.Printf("[WARN] Error releasing client to pool: %v", err)
+			if !released {
+				if err := SdkClientPool.release(clientConfig); err != nil {
+					log.Printf("[WARN] Error releasing client to pool: %v", err)
+				}
+				released = true
 			}
 		}()
 
@@ -525,12 +823,31 @@ func runWithPooledClient(method resContextFunc) resContextFunc {
 		// Copy to a new providerMeta object and set the sdk config
 		newMeta := *meta.(*ProviderMeta)
 		newMeta.ClientConfig = clientConfig
-		return method(ctx, r, &newMeta)
+
+		result := method(ctx, r, &newMeta)
+
+		// Release client after successful execution
+		if err := SdkClientPool.release(clientConfig); err != nil {
+			log.Printf("[WARN] Error releasing client to pool: %v", err)
+		}
+		released = true
+
+		return result
 	}
 }
 
-// Inject a pooled SDK client connection into an exporter's getAll* method
+// GetAllWithPooledClient Inject a pooled SDK client connection into an exporter's getAll* method
 func GetAllWithPooledClient(method GetAllConfigFunc) resourceExporter.GetAllResourcesFunc {
+	if mrmo.IsActive() {
+		clientConfig, err := mrmo.GetClientConfig()
+		if err != nil {
+			log.Printf("[WARN] Error getting client config: %s", err.Error())
+		}
+		return func(ctx context.Context) (resourceExporter.ResourceIDMetaMap, diag.Diagnostics) {
+			return method(ctx, clientConfig)
+		}
+	}
+
 	return func(ctx context.Context) (resourceExporter.ResourceIDMetaMap, diag.Diagnostics) {
 		clientConfig, err := SdkClientPool.acquire(ctx)
 		if err != nil {
