@@ -38,16 +38,16 @@ func buildCampaignRuleEntities(entities *schema.Set) *platformclientv2.Campaignr
 	}
 
 	campaignRuleEntitiesMap := campaignRuleEntitiesList[0].(map[string]interface{})
-	if campaigns := campaignRuleEntitiesMap["campaign_ids"].([]interface{}); campaigns != nil {
+	if campaigns, ok := campaignRuleEntitiesMap["campaign_ids"].([]interface{}); ok && campaigns != nil {
 		campaignRuleEntities.Campaigns = util.BuildSdkDomainEntityRefArrFromArr(campaigns)
 	}
-	if sequences := campaignRuleEntitiesMap["sequence_ids"].([]interface{}); sequences != nil {
+	if sequences, ok := campaignRuleEntitiesMap["sequence_ids"].([]interface{}); ok && sequences != nil {
 		campaignRuleEntities.Sequences = util.BuildSdkDomainEntityRefArrFromArr(sequences)
 	}
-	if smsCampaigns := campaignRuleEntitiesMap["sms_campaign_ids"].([]interface{}); smsCampaigns != nil {
+	if smsCampaigns, ok := campaignRuleEntitiesMap["sms_campaign_ids"].([]interface{}); ok && smsCampaigns != nil {
 		campaignRuleEntities.EmailCampaigns = util.BuildSdkDomainEntityRefArrFromArr(smsCampaigns)
 	}
-	if emailCampaigns := campaignRuleEntitiesMap["email_campaign_ids"].([]interface{}); emailCampaigns != nil {
+	if emailCampaigns, ok := campaignRuleEntitiesMap["email_campaign_ids"].([]interface{}); ok && emailCampaigns != nil {
 		campaignRuleEntities.SmsCampaigns = util.BuildSdkDomainEntityRefArrFromArr(emailCampaigns)
 	}
 	return &campaignRuleEntities
@@ -152,16 +152,16 @@ func buildCampaignRuleActionEntities(set *schema.Set) *platformclientv2.Campaign
 
 	sdkCampaignRuleActionEntities.UseTriggeringEntity = platformclientv2.Bool(entitiesMap["use_triggering_entity"].(bool))
 
-	if campaignIds := entitiesMap["campaign_ids"].([]interface{}); campaignIds != nil {
+	if campaignIds, ok := entitiesMap["campaign_ids"].([]interface{}); ok && campaignIds != nil {
 		sdkCampaignRuleActionEntities.Campaigns = util.BuildSdkDomainEntityRefArrFromArr(campaignIds)
 	}
-	if sequenceIds := entitiesMap["sequence_ids"].([]interface{}); sequenceIds != nil {
+	if sequenceIds, ok := entitiesMap["sequence_ids"].([]interface{}); ok && sequenceIds != nil {
 		sdkCampaignRuleActionEntities.Sequences = util.BuildSdkDomainEntityRefArrFromArr(sequenceIds)
 	}
-	if smsCampaignIds := entitiesMap["sms_campaign_ids"].([]interface{}); smsCampaignIds != nil {
+	if smsCampaignIds, ok := entitiesMap["sms_campaign_ids"].([]interface{}); ok && smsCampaignIds != nil {
 		sdkCampaignRuleActionEntities.EmailCampaigns = util.BuildSdkDomainEntityRefArrFromArr(smsCampaignIds)
 	}
-	if emailCampaignIds := entitiesMap["email_campaign_ids"].([]interface{}); emailCampaignIds != nil {
+	if emailCampaignIds, ok := entitiesMap["email_campaign_ids"].([]interface{}); ok && emailCampaignIds != nil {
 		sdkCampaignRuleActionEntities.SmsCampaigns = util.BuildSdkDomainEntityRefArrFromArr(emailCampaignIds)
 	}
 
